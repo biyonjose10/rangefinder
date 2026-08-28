@@ -24,6 +24,7 @@ Per-request attribution is also embedded in the generated Patrol Dispatch Order 
 | [MapLibre GL JS](https://maplibre.org/) | Interactive map rendering | BSD-3-Clause |
 | [@react-pdf/renderer](https://react-pdf.org/) | Server-side generation of the Patrol Dispatch Order PDF | MIT |
 | [ESLint](https://eslint.org/) | Linting | MIT |
+| ESA WorldCover 10m v200 (2021) | Global land cover, used to validate that ranked targets sit on forest | [esa-worldcover.org](https://esa-worldcover.org/) | CC BY 4.0 — © ESA WorldCover project / Contains modified Copernicus Sentinel data |
 
 ## Notes on use
 

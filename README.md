@@ -16,6 +16,39 @@ That method fails in a specific, predictable way: most alerts are unreachable, d
 
 Rangefinder does not add more data. It ranks the data that already exists into something a ranger can act on and defend afterwards.
 
+## Validation: are these fires actually on forest?
+
+NASA FIRMS detects **heat**, not forest loss. During the Amazon burning season most fires
+are on land that was already cleared — pasture maintenance, crop residue, re-burns — which
+are routine and usually legal. A fire-based deforestation tool therefore owes you evidence
+that its targets are on forest at all, rather than confidently ranking farm burns.
+
+We checked. `scripts/validate_landcover.py` samples ESA WorldCover 10m (2021) in a ~1.1 km
+box around every ranked target:
+
+| | |
+|---|---|
+| Targets on ≥50% tree cover in 2021 | **10 of 10** |
+| Mean tree cover across the top 10 | **91.7%** |
+| Lowest individual target | 56.6% |
+
+WorldCover predates these fires by five years, which is precisely the baseline that matters:
+land already classified as cropland or grassland in 2021 cannot be undergoing deforestation
+in 2026. Every current target sits on what was closed-canopy forest. The dense road grid
+visible on the western side of the map is a **frontier pushing into forest**, not
+established agriculture.
+
+Reproduce it with `python scripts/validate_landcover.py`; the recorded run is in
+`docs/landcover-validation.txt`.
+
+**What this does and does not establish.** It shows the targets are on land that was forest
+in 2021, which rules out the largest confound. It does not by itself prove clearing is
+happening *now* — the land could in principle have been cleared between 2021 and 2025 and
+be re-burning — and it does not distinguish a deforestation fire from an understory fire.
+Closing those gaps means adding true canopy-loss alerts (GLAD/RADD), which is the top item
+on the roadmap below.
+
+
 ## How it works
 
 ```mermaid
