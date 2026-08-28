@@ -322,14 +322,22 @@ export default function MapView({
       const colour = colourFor(t.score);
       const isSel = t.id === selectedId;
 
-      el.style.cssText = `position:relative;width:${size}px;height:${size}px;cursor:pointer`;
+      // Do NOT set `position` on the marker root. MapLibre positions markers by
+      // applying a transform to this element and relies on its own
+      // `.maplibregl-marker { position: absolute }` rule; an inline `position`
+      // beats that stylesheet rule, which left every marker stuck in document
+      // flow instead of pinned to its coordinate. The sized, relatively
+      // positioned box goes on an inner wrapper instead.
+      el.style.cssText = `width:${size}px;height:${size}px;cursor:pointer`;
       el.innerHTML = `
-        ${i === 0 ? `<span class="ping" style="position:absolute;inset:0;border-radius:50%;background:${colour}"></span>` : ""}
-        <span style="position:absolute;inset:0;border-radius:50%;background:${colour};
-              opacity:${isSel ? 1 : 0.85};
-              border:${isSel ? "2.5px solid #e8f0ed" : "1.5px solid rgba(10,15,13,.85)"};
-              display:flex;align-items:center;justify-content:center;
-              font-size:9px;font-weight:700;color:#06120c">${i + 1}</span>`;
+        <span style="position:relative;display:block;width:100%;height:100%">
+          ${i === 0 ? `<span class="ping" style="position:absolute;inset:0;border-radius:50%;background:${colour}"></span>` : ""}
+          <span style="position:absolute;inset:0;border-radius:50%;background:${colour};
+                opacity:${isSel ? 1 : 0.85};
+                border:${isSel ? "2.5px solid #e8f0ed" : "1.5px solid rgba(10,15,13,.85)"};
+                display:flex;align-items:center;justify-content:center;
+                font-size:9px;font-weight:700;color:#06120c">${i + 1}</span>
+        </span>`;
       el.title = `#${i + 1} · ${t.count} detections · actionability ${t.score.toFixed(1)}`;
       el.addEventListener("click", (e) => {
         e.stopPropagation();
