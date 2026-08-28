@@ -340,10 +340,28 @@ function TargetRow({
   const colour = scoreColour(t.score);
 
   return (
+    // A button in behaviour, so it must be one in fact. These were click-only
+    // divs, which meant a keyboard or screen-reader user could not open a
+    // target or read the justification behind it at all — the same class of
+    // exclusion as the colour-only severity scale.
     <div
-      className="cursor-pointer border-b border-[var(--line-soft)] px-4 py-3 transition-colors hover:bg-[var(--panel-2)]"
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      aria-label={`${severityLabel(t.score)} target, rank ${rank}, ${
+        t.protectedArea ?? "unclassified tenure"
+      }, actionability ${Math.round(t.score)} of 100`}
+      className="cursor-pointer border-b border-[var(--line-soft)] px-4 py-3 transition-colors hover:bg-[var(--panel-2)] focus:outline-none focus-visible:bg-[var(--panel-2)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
       style={open ? { background: "var(--panel-2)" } : undefined}
       onClick={onClick}
+      onKeyDown={(e) => {
+        // Space and Enter are what a button responds to; without this the row
+        // is focusable but still cannot be activated.
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <div className="flex items-start gap-3">
         <div
