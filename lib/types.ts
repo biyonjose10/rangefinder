@@ -57,6 +57,9 @@ export interface ScoredTarget extends Cluster {
   routed: boolean;
   /** Estimated one-way travel time in hours. */
   driveTimeHours: number;
+  /** Set when the event sits on a known permanent industrial heat source, so
+   *  it is very probably not a fire at all. */
+  industrialSource: string | null;
   /** Percentage tree cover at this location in the ESA WorldCover baseline,
    *  or null when unknown. Fire on land that was already cleared is very
    *  probably agricultural burning rather than deforestation. */
@@ -74,6 +77,18 @@ export interface ScoredTarget extends Cluster {
     worstRank: number;
     nominalRank: number;
   };
+}
+
+/**
+ * A fixed installation that shows up as heat from orbit every day — a quarry,
+ * works, power plant or gas flare. VIIRS cannot tell these from a fire, so
+ * without them a steel mill sits permanently at the top of the patrol queue.
+ */
+export interface HeatSource {
+  lat: number;
+  lon: number;
+  kind: string;
+  name?: string | null;
 }
 
 export interface RangerPost {

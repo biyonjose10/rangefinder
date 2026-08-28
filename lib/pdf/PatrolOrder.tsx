@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 
 import type { RangerPost, ScoredTarget } from "../types";
+import { severityLabel } from "../marker";
 import { ATTRIBUTION } from "../config";
 
 /**
@@ -206,7 +207,12 @@ export function PatrolOrder(props: PatrolOrderProps) {
                   ? `  ·  ${Math.round(t.treeCoverPct)}% forest baseline`
                   : ""}
               </Text>
-              <Text style={styles.scorePill}>ACTIONABILITY {t.score.toFixed(1)}/100</Text>
+              {/* Severity in words as well as a number: a field order is
+                  routinely photocopied in black and white, where any colour
+                  coding disappears entirely. */}
+              <Text style={styles.scorePill}>
+                {severityLabel(t.score)} · ACTIONABILITY {t.score.toFixed(1)}/100
+              </Text>
             </View>
 
             <View style={styles.coordRow}>

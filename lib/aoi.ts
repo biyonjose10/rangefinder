@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { FirmsRegion } from "./sources/firms";
-import type { ProtectedArea, RangerPost, RoadSegment, Alert } from "./types";
+import type { ProtectedArea, RangerPost, RoadSegment, Alert, HeatSource } from "./types";
 import type { ForestGrid } from "./forest";
 
 /**
@@ -93,6 +93,7 @@ export interface AoiData {
   roads: RoadSegment[];
   protectedAreas: ProtectedArea[];
   forestGrid: ForestGrid | null;
+  heatSources: HeatSource[];
 }
 
 /**
@@ -104,10 +105,11 @@ export interface AoiData {
  */
 export async function loadAoiData(meta: AoiMeta): Promise<Omit<AoiData, "alerts">> {
   const dir = path.join(AOI_ROOT, meta.slug);
-  const [roads, protectedAreas, forestGrid] = await Promise.all([
+  const [roads, protectedAreas, forestGrid, heatSources] = await Promise.all([
     readJson<RoadSegment[]>(path.join(dir, "roads.json")),
     readJson<ProtectedArea[]>(path.join(dir, "protected-areas.json")),
     readJson<ForestGrid>(path.join(dir, "forest-grid.json")),
+    readJson<HeatSource[]>(path.join(dir, "heat-sources.json")),
   ]);
 
   return {
@@ -115,6 +117,7 @@ export async function loadAoiData(meta: AoiMeta): Promise<Omit<AoiData, "alerts"
     roads: roads ?? [],
     protectedAreas: protectedAreas ?? [],
     forestGrid: forestGrid ?? null,
+    heatSources: heatSources ?? [],
   };
 }
 

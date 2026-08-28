@@ -2,6 +2,7 @@ import { haversineM, distanceToNearestRoadM, pointInRings } from "./geo";
 import type { RouteResult } from "./route";
 import type {
   Cluster,
+  HeatSource,
   ProtectedArea,
   RangerPost,
   RoadSegment,
@@ -66,6 +67,32 @@ const EXTENT_SATURATION = 30;
 const RECENCY_HALFLIFE_DAYS = 2;
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/** How close a detection must be to a known installation to be attributed to it. */
+const INDUSTRIAL_RADIUS_M = 1200;
+
+/**
+ * Is this "fire" actually a factory?
+ *
+ * VIIRS reports thermal anomalies, and a quarry, works, power station or gas
+ * flare radiates heat every single day. Nothing in the pipeline distinguished
+ * those from a burning forest, so a single industrial site would occupy the top
+ * of the patrol queue indefinitely and send crews to the same fence line
+ * forever. Detections attributed to a known installation are pushed to the
+ * bottom rather than dropped, because the match is proximity-based and a real
+ * fire can start next to a quarry.
+ */
+function industrialSourceNear(
+  cluster: Cluster,
+  sources: HeatSource[]
+): string | null {
+  for (const s of sources) {
+    if (haversineM(cluster.lat, cluster.lon, s.lat, s.lon) <= INDUSTRIAL_RADIUS_M) {
+      return s.name ? `${s.name} (${s.kind})` : s.kind;
+    }
+  }
+  return null;
+}
 
 function daysSince(dateStr: string, now: Date): number {
   const then = new Date(`${dateStr}T00:00:00Z`).getTime();
@@ -156,6 +183,13 @@ function buildRationale(
       `${Math.round(t.frpSum)} MW total radiative power.`
   );
 
+  if (t.industrialSource) {
+    out.push(
+      `Sits within ${INDUSTRIAL_RADIUS_M} m of ${t.industrialSource} — persistent ` +
+        `industrial heat, very probably not a fire. Suppressed in the ranking.`
+    );
+  }
+
   if (t.treeCoverPct !== null) {
     if (t.treeCoverPct >= 60) {
       out.push(
@@ -225,6 +259,8 @@ export function scoreCluster(
     route?: RouteResult | null;
     /** Baseline tree cover at the cluster centroid, 0-100. */
     treeCoverPct?: number | null;
+    /** Known permanent industrial heat sources in this area. */
+    heatSources?: HeatSource[];
     now?: Date;
   }
 ): ScoredTarget {
@@ -237,6 +273,7 @@ export function scoreCluster(
 
   const treeCoverPct = ctx.treeCoverPct ?? null;
   const route = ctx.route ?? null;
+  const industrialSource = industrialSourceNear(cluster, ctx.heatSources ?? []);
 
   const breakdown: ScoreBreakdown = {
     forest: forestFactor(treeCoverPct),
@@ -254,7 +291,12 @@ export function scoreCluster(
   for (const key of Object.keys(WEIGHTS) as (keyof ScoreBreakdown)[]) {
     logSum += WEIGHTS[key] * Math.log(Math.max(0.02, breakdown[key]));
   }
-  const score = Math.round(Math.exp(logSum) * 1000) / 10; // 0..100, one decimal
+  let score = Math.round(Math.exp(logSum) * 1000) / 10; // 0..100, one decimal
+
+  // A match against a permanent installation is strong evidence this is not a
+  // fire. Suppressed rather than removed: proximity is not proof, and a genuine
+  // fire beside a quarry should still be visible to someone scrolling down.
+  if (industrialSource) score = Math.round(score * 0.15 * 10) / 10;
 
   const partial = {
     ...cluster,
@@ -266,6 +308,7 @@ export function scoreCluster(
     detourRatio: route ? route.detourRatio : null,
     routed: route !== null,
     treeCoverPct,
+    industrialSource,
     // Prefer the routed time. The straight-line estimate remains only as a
     // fallback, and is flagged as such by `routed: false`.
     driveTimeHours: route

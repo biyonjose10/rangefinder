@@ -41,6 +41,8 @@ export interface TargetsPayload {
     events: number;
     roadSegments: number;
     protectedAreas: number;
+    heatSources: number;
+    suppressedIndustrial: number;
     routingNodes: number;
     routed: number;
   };
@@ -98,6 +100,7 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
     post: meta.post,
     roads: data.roads,
     protectedAreas: data.protectedAreas,
+    heatSources: data.heatSources,
     context: (c) => ({ treeCoverPct: treeCoverAt(data.forestGrid, c.lat, c.lon) }),
     route: (c) => (graph ? graph.route(meta.post, { lat: c.lat, lon: c.lon }) : null),
   });
@@ -122,6 +125,8 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
       events: clusters.length,
       roadSegments: data.roads.length,
       protectedAreas: data.protectedAreas.length,
+      heatSources: data.heatSources.length,
+      suppressedIndustrial: targets.filter((t) => t.industrialSource).length,
       routingNodes: graph?.size ?? 0,
       routed: targets.filter((t) => t.routed).length,
     },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 
 import type { ProtectedArea, RangerPost, ScoredTarget } from "@/lib/types";
+import { SEVERITY, markerColour, severityLabel } from "@/lib/marker";
 
 // MapLibre touches `window` at module scope, so it can only load client-side.
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -67,8 +68,9 @@ interface Verification {
  *  actually sits there — roughly 5 km. */
 const MATCH_DEG = 0.05;
 
-const scoreColour = (s: number) =>
-  s >= 60 ? "#ef4444" : s >= 50 ? "#f97316" : s >= 40 ? "#eab308" : "#84cc16";
+// Single source of truth, shared with the map markers — see lib/marker.ts for
+// why this palette was chosen over the original red-to-green ramp.
+const scoreColour = markerColour;
 
 export default function Home() {
   // Which area of operations we are looking at. Everything else — targets,
@@ -275,15 +277,10 @@ function Legend() {
     <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-[var(--line)] bg-[rgba(10,15,13,.88)] px-3 py-2 text-[10px] text-[var(--muted)] backdrop-blur">
       <div className="kicker mb-1.5">Actionability</div>
       <div className="flex items-center gap-2.5">
-        {[
-          ["#ef4444", "60+"],
-          ["#f97316", "50+"],
-          ["#eab308", "40+"],
-          ["#84cc16", "<40"],
-        ].map(([c, l]) => (
-          <span key={l} className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full" style={{ background: c }} />
-            {l}
+        {SEVERITY.map((s) => (
+          <span key={s.label} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: s.colour }} />
+            {s.label}
           </span>
         ))}
       </div>
@@ -341,8 +338,16 @@ function TargetRow({
             <span className="truncate text-[13px] font-semibold">
               {t.protectedArea ?? "Unclassified tenure"}
             </span>
-            <span className="mono ml-auto shrink-0 text-[13px] font-bold" style={{ color: colour }}>
-              {t.score.toFixed(1)}
+            <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
+              <span
+                className="text-[9px] font-bold tracking-wider"
+                style={{ color: colour }}
+              >
+                {severityLabel(t.score)}
+              </span>
+              <span className="mono text-[13px] font-bold" style={{ color: colour }}>
+                {t.score.toFixed(1)}
+              </span>
             </span>
           </div>
 
@@ -380,6 +385,14 @@ function TargetRow({
                 title="Tree cover at the ESA WorldCover 2021 baseline. Fire on land that was already cleared is probably agricultural."
               >
                 {Math.round(t.treeCoverPct)}% FOREST BASELINE
+              </span>
+            )}
+            {t.industrialSource && (
+              <span
+                className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--muted)]"
+                title={`Within 1.2 km of ${t.industrialSource} — persistent industrial heat, very probably not a fire.`}
+              >
+                LIKELY INDUSTRIAL HEAT
               </span>
             )}
             {!t.routed && (

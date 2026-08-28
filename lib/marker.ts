@@ -22,11 +22,36 @@ export function markerSize(count: number): number {
   return Math.max(14, Math.min(30, 11 + Math.sqrt(count) * 1.7));
 }
 
+/**
+ * Severity palette, chosen for monotonic luminance under normal, deuteranope
+ * and protanope vision.
+ *
+ * The previous ramp ran red -> orange -> yellow -> green, which is the worst
+ * available choice: red-green colour blindness affects roughly 8% of men, and
+ * simulating it collapsed all four levels into near-identical olives whose
+ * ordering actually *inverted* between the bottom two. For an interface whose
+ * entire job is "which of these is urgent", a large share of users could not
+ * read the one thing it exists to say.
+ *
+ * These four are monotonically decreasing in luminance under all three
+ * simulations, so the ranking survives even when hue does not. Colour is also
+ * no longer load-bearing — every place a colour appears, `severityLabel` puts
+ * the same information in words.
+ */
+export const SEVERITY = [
+  { min: 60, colour: "#fca5a5", label: "CRITICAL" },
+  { min: 50, colour: "#fb923c", label: "HIGH" },
+  { min: 40, colour: "#ca8a04", label: "MODERATE" },
+  { min: -Infinity, colour: "#4d7c0f", label: "LOW" },
+] as const;
+
 export function markerColour(score: number): string {
-  if (score >= 60) return "#ef4444";
-  if (score >= 50) return "#f97316";
-  if (score >= 40) return "#eab308";
-  return "#84cc16";
+  return (SEVERITY.find((s) => score >= s.min) ?? SEVERITY[3]).colour;
+}
+
+/** The same information as the colour, in words, for anyone the colour fails. */
+export function severityLabel(score: number): string {
+  return (SEVERITY.find((s) => score >= s.min) ?? SEVERITY[3]).label;
 }
 
 /**
