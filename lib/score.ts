@@ -210,6 +210,13 @@ function buildRationale(
     );
   }
 
+  if (t.recentLossPct !== null && t.recentLossPct >= 10) {
+    out.push(
+      `${Math.round(t.recentLossPct)}% of this cell was already cleared between 2021 ` +
+        `and 2024 — the forest figure below is corrected for that.`
+    );
+  }
+
   if (t.treeCoverPct !== null) {
     if (t.treeCoverPct >= 60) {
       out.push(
@@ -285,8 +292,11 @@ export function scoreCluster(
     protectedAreas: ProtectedArea[];
     /** Road-network route from the post, when one could be computed. */
     route?: RouteResult | null;
-    /** Baseline tree cover at the cluster centroid, 0-100. */
+    /** Baseline tree cover at the cluster centroid, 0-100, already corrected
+     *  for clearing since the baseline year. */
     treeCoverPct?: number | null;
+    /** How much of that cell was cleared since the baseline. */
+    recentLossPct?: number | null;
     /** Known permanent industrial heat sources in this area. */
     heatSources?: HeatSource[];
     now?: Date;
@@ -300,6 +310,7 @@ export function scoreCluster(
   const area = findProtectedArea(cluster, ctx.protectedAreas);
 
   const treeCoverPct = ctx.treeCoverPct ?? null;
+  const recentLossPct = ctx.recentLossPct ?? null;
   const route = ctx.route ?? null;
   const industrialSource = industrialSourceNear(cluster, ctx.heatSources ?? []);
 
@@ -344,6 +355,7 @@ export function scoreCluster(
     detourRatio: route ? route.detourRatio : null,
     routed: route !== null,
     treeCoverPct,
+    recentLossPct,
     nightFraction,
     // Round trip. A park office runs on a fuel budget, and "how many litres"
     // is the number that actually decides whether the patrol happens.

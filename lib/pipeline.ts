@@ -2,7 +2,7 @@ import { clusterAlerts } from "./cluster";
 import { rankTargets } from "./score";
 import { getRoadGraph } from "./route";
 import { analyseRobustness } from "./sensitivity";
-import { treeCoverAt } from "./forest";
+import { forestLossAt, treeCoverAt } from "./forest";
 import { listAois, loadAoiData, loadCachedAlerts, resolveAoi, type AoiMeta } from "./aoi";
 import { fetchLiveAlerts } from "./sources/firms";
 import { DEMO_MODE } from "./config";
@@ -111,7 +111,10 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
     roads: data.roads,
     protectedAreas: data.protectedAreas,
     heatSources: data.heatSources,
-    context: (c) => ({ treeCoverPct: treeCoverAt(data.forestGrid, c.lat, c.lon) }),
+    context: (c) => ({
+      treeCoverPct: treeCoverAt(data.forestGrid, c.lat, c.lon),
+      recentLossPct: forestLossAt(data.forestGrid, c.lat, c.lon),
+    }),
     route: (c) => (graph ? graph.route(meta.post, { lat: c.lat, lon: c.lon }) : null),
   });
 

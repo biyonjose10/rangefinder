@@ -57,6 +57,9 @@ export interface ScoredTarget extends Cluster {
   routed: boolean;
   /** Estimated one-way travel time in hours. */
   driveTimeHours: number;
+  /** Percentage of this cell cleared since the forest baseline year, from
+   *  Hansen annual loss. Null when the layer is unavailable. */
+  recentLossPct: number | null;
   /** Share of detections in this event that were seen at night. Night burns
    *  are both more reliably detected and more likely to be deliberate. */
   nightFraction: number;
