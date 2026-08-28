@@ -4,6 +4,8 @@ Deforestation alerting is a solved problem. Deciding which alert to drive to fir
 
 ![Rangefinder — the road-gridded agricultural frontier on the west, the roadless Parque Indígena do Xingu on the east, live fire detections ranked between them](docs/screenshot.jpg)
 
+**Live demo: [https://rangefinder-cyan.vercel.app](https://rangefinder-cyan.vercel.app)**
+
 Built for **Hack the Habitat** (theme: tech that protects the planet's ecosystems, climate and wildlife).
 
 ## The problem
