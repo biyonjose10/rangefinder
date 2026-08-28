@@ -11,6 +11,13 @@ import {
 } from "maplibre-gl";
 
 import type { ProtectedArea, RangerPost, ScoredTarget } from "@/lib/types";
+import {
+  POST_MARKER_STYLE,
+  markerColour,
+  markerInnerHtml,
+  markerRootStyle,
+  markerSize,
+} from "@/lib/marker";
 
 interface Props {
   targets: ScoredTarget[];
@@ -61,9 +68,6 @@ const STYLE = {
     },
   ],
 };
-
-const colourFor = (score: number) =>
-  score >= 60 ? "#ef4444" : score >= 50 ? "#f97316" : score >= 40 ? "#eab308" : "#84cc16";
 
 export default function MapView({
   targets,
@@ -309,8 +313,7 @@ export default function MapView({
     markers.current = [];
 
     const postEl = document.createElement("div");
-    postEl.style.cssText =
-      "width:13px;height:13px;border-radius:3px;background:#e8f0ed;border:2px solid #0a0f0d;box-shadow:0 0 0 1.5px #e8f0ed";
+    postEl.style.cssText = POST_MARKER_STYLE;
     postEl.title = `Origin station — ${post.name}`;
     markers.current.push(
       new Marker({ element: postEl }).setLngLat([post.lon, post.lat]).addTo(m)
@@ -318,26 +321,19 @@ export default function MapView({
 
     targets.forEach((t, i) => {
       const el = document.createElement("div");
-      const size = Math.max(14, Math.min(30, 11 + Math.sqrt(t.count) * 1.7));
-      const colour = colourFor(t.score);
+      const size = markerSize(t.count);
+      const colour = markerColour(t.score);
       const isSel = t.id === selectedId;
 
-      // Do NOT set `position` on the marker root. MapLibre positions markers by
-      // applying a transform to this element and relies on its own
-      // `.maplibregl-marker { position: absolute }` rule; an inline `position`
-      // beats that stylesheet rule, which left every marker stuck in document
-      // flow instead of pinned to its coordinate. The sized, relatively
-      // positioned box goes on an inner wrapper instead.
-      el.style.cssText = `width:${size}px;height:${size}px;cursor:pointer`;
-      el.innerHTML = `
-        <span style="position:relative;display:block;width:100%;height:100%">
-          ${i === 0 ? `<span class="ping" style="position:absolute;inset:0;border-radius:50%;background:${colour}"></span>` : ""}
-          <span style="position:absolute;inset:0;border-radius:50%;background:${colour};
-                opacity:${isSel ? 1 : 0.85};
-                border:${isSel ? "2.5px solid #e8f0ed" : "1.5px solid rgba(10,15,13,.85)"};
-                display:flex;align-items:center;justify-content:center;
-                font-size:9px;font-weight:700;color:#06120c">${i + 1}</span>
-        </span>`;
+      // Style and markup come from lib/marker.ts, where the rule that the root
+      // element carries no positioning property is enforced by tests.
+      el.style.cssText = markerRootStyle(size);
+      el.innerHTML = markerInnerHtml({
+        rank: i + 1,
+        colour,
+        selected: isSel,
+        pulse: i === 0,
+      });
       el.title = `#${i + 1} · ${t.count} detections · actionability ${t.score.toFixed(1)}`;
       el.addEventListener("click", (e) => {
         e.stopPropagation();
