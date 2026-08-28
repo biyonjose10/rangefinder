@@ -30,6 +30,18 @@ const FACTORS: { key: keyof ScoredTarget["breakdown"]; label: string }[] = [
   { key: "proximity", label: "Proximity" },
 ];
 
+interface Verification {
+  point: { lat: number; lon: number };
+  ndvi_available: boolean;
+  before: { scene_date: string; cloud_cover_pct: number; mean_ndvi: number };
+  after: { scene_date: string; cloud_cover_pct: number; mean_ndvi: number };
+  ndvi_delta_after_minus_before: number;
+}
+
+/** The imagery was computed for one point. Only offer it to a target that
+ *  actually sits there — roughly 5 km. */
+const MATCH_DEG = 0.05;
+
 const scoreColour = (s: number) =>
   s >= 60 ? "#ef4444" : s >= 50 ? "#f97316" : s >= 40 ? "#eab308" : "#84cc16";
 
@@ -40,6 +52,7 @@ export default function Home() {
   // Distinct from `selected`: the list opens the top target on load for
   // legibility, but the camera must not move until a human asks it to.
   const [focus, setFocus] = useState<string | null>(null);
+  const [verif, setVerif] = useState<Verification | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +68,11 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setAreas)
       .catch(() => setAreas([]));
+
+    fetch("/api/verification")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setVerif)
+      .catch(() => setVerif(null));
   }, []);
 
   const top = useMemo(() => data?.targets.slice(0, 12) ?? [], [data]);
@@ -149,6 +167,14 @@ export default function Home() {
                 target={t}
                 rank={i + 1}
                 open={t.id === selected}
+                verification={
+                  verif &&
+                  verif.ndvi_available &&
+                  Math.abs(t.lat - verif.point.lat) < MATCH_DEG &&
+                  Math.abs(t.lon - verif.point.lon) < MATCH_DEG
+                    ? verif
+                    : null
+                }
                 onClick={() => {
                   setSelected(t.id === selected ? null : t.id);
                   setFocus(t.id);
@@ -215,11 +241,13 @@ function TargetRow({
   target: t,
   rank,
   open,
+  verification,
   onClick,
 }: {
   target: ScoredTarget;
   rank: number;
   open: boolean;
+  verification: Verification | null;
   onClick: () => void;
 }) {
   const colour = scoreColour(t.score);
@@ -300,10 +328,75 @@ function TargetRow({
                   </li>
                 ))}
               </ul>
+
+              {verification && <NdviPanel v={verification} />}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Sentinel-2 corroboration for a single target.
+ *
+ * A thermal detection says "something here is hot". It does not say "forest was
+ * removed" — a fire on already-cleared pasture looks identical from orbit. The
+ * NDVI drop between two cloud-free scenes a year apart is the check that
+ * distinguishes the two, and it is the difference between dispatching a crew on
+ * a heat signature and dispatching them on evidence.
+ */
+function NdviPanel({ v }: { v: Verification }) {
+  const drop = v.ndvi_delta_after_minus_before;
+  const day = (iso: string) => iso.slice(0, 10);
+  const pct = (n: number) => (n < 0.01 ? "<0.01" : n.toFixed(2));
+
+  return (
+    <div className="mt-3 border-t border-[var(--line-soft)] pt-2.5">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="kicker">Sentinel-2 corroboration</span>
+        <span
+          className="mono text-[11px] font-bold"
+          style={{ color: drop < 0 ? "var(--danger)" : "var(--accent)" }}
+        >
+          NDVI {drop > 0 ? "+" : ""}
+          {drop.toFixed(4)}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
+        {[
+          { label: "Before", src: "/imagery/before.png", d: v.before },
+          { label: "After", src: "/imagery/after.png", d: v.after },
+        ].map((c) => (
+          <figure key={c.label} className="min-w-0 flex-1">
+            {/* Plain <img>: these are small static chips, and next/image's
+                optimiser adds a server round-trip for no benefit here. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={c.src}
+              alt={`Sentinel-2 true colour, ${day(c.d.scene_date)}`}
+              className="aspect-square w-full rounded border border-[var(--line)] object-cover"
+              loading="lazy"
+            />
+            <figcaption className="mt-1 leading-tight">
+              <div className="text-[10px] font-semibold text-[var(--text)]">
+                {c.label} · {day(c.d.scene_date)}
+              </div>
+              <div className="mono text-[10px] text-[var(--dim)]">
+                NDVI {c.d.mean_ndvi.toFixed(3)} · {pct(c.d.cloud_cover_pct)}% cloud
+              </div>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      <p className="mt-1.5 text-[10px] leading-snug text-[var(--dim)]">
+        Mean vegetation index fell {Math.abs(drop).toFixed(4)} between the two
+        scenes — canopy loss, not just a heat signature. Cloud figures are
+        scene-level; localised haze or smoke can still appear in the chip.
+      </p>
     </div>
   );
 }
