@@ -57,6 +57,11 @@ export interface ScoredTarget extends Cluster {
   routed: boolean;
   /** Estimated one-way travel time in hours. */
   driveTimeHours: number;
+  /** Share of detections in this event that were seen at night. Night burns
+   *  are both more reliably detected and more likely to be deliberate. */
+  nightFraction: number;
+  /** Estimated diesel for the round trip, litres. */
+  fuelLitres: number | null;
   /** Set when the event sits on a known permanent industrial heat source, so
    *  it is very probably not a fire at all. */
   industrialSource: string | null;

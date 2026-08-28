@@ -41,6 +41,26 @@ const WEIGHTS: Record<keyof ScoreBreakdown, number> = {
 const CONFIDENCE_VALUE = { low: 0.4, nominal: 0.75, high: 1.0 } as const;
 
 /**
+ * Night detections were being collected and thrown away.
+ *
+ * Two things make them worth more. They are technically cleaner — no solar
+ * reflection to cause false positives, which is why VIIRS confidence is
+ * generally higher at night. And operationally, legitimate agricultural
+ * burning is overwhelmingly a daytime activity, so a fire that starts after
+ * dark is likelier to be one somebody did not want observed.
+ *
+ * Applied as a modest bonus to the confidence factor rather than a factor of
+ * its own: it is a real signal, but not a strong enough one to stand beside
+ * extent or protection.
+ */
+function nightAdjustedConfidence(base: number, nightFraction: number): number {
+  return clamp01(base * (1 + 0.2 * nightFraction));
+}
+
+/** Unsealed-road diesel consumption for a 4x4, litres per 100 km. */
+const LITRES_PER_100KM = 18;
+
+/**
  * Baseline tree cover below which a detection is very probably not
  * deforestation at all.
  *
@@ -231,13 +251,21 @@ function buildRationale(
     );
   }
 
+  if (t.nightFraction >= 0.5) {
+    out.push(
+      `${Math.round(t.nightFraction * 100)}% of detections were at night — legitimate ` +
+        `burning is largely a daytime activity.`
+    );
+  }
+
   if (t.routed && t.routeKm !== null) {
     const detour = t.detourRatio
       ? ` (${t.detourRatio.toFixed(1)}× the straight-line distance)`
       : "";
+    const fuel = t.fuelLitres ? `, about ${t.fuelLitres} L of diesel round trip` : "";
     out.push(
       `${t.routeKm.toFixed(0)} km by road from the ranger post${detour}; ` +
-        `est. ${t.driveTimeHours.toFixed(1)} h one way.`
+        `est. ${t.driveTimeHours.toFixed(1)} h one way${fuel}.`
     );
   } else {
     out.push(
@@ -275,9 +303,17 @@ export function scoreCluster(
   const route = ctx.route ?? null;
   const industrialSource = industrialSourceNear(cluster, ctx.heatSources ?? []);
 
+  const nightFraction =
+    cluster.alerts.length > 0
+      ? cluster.alerts.filter((a) => a.dayNight === "N").length / cluster.alerts.length
+      : 0;
+
   const breakdown: ScoreBreakdown = {
     forest: forestFactor(treeCoverPct),
-    confidence: CONFIDENCE_VALUE[cluster.maxConfidence] ?? 0.5,
+    confidence: nightAdjustedConfidence(
+      CONFIDENCE_VALUE[cluster.maxConfidence] ?? 0.5,
+      nightFraction
+    ),
     extent: extentFactor(cluster.count, cluster.frpSum),
     recency: recencyFactor(cluster.lastSeen, now),
     access: accessFactor(distanceToRoadM),
@@ -308,6 +344,12 @@ export function scoreCluster(
     detourRatio: route ? route.detourRatio : null,
     routed: route !== null,
     treeCoverPct,
+    nightFraction,
+    // Round trip. A park office runs on a fuel budget, and "how many litres"
+    // is the number that actually decides whether the patrol happens.
+    fuelLitres: route
+      ? Math.round(((route.roadMetres / 1000) * 2 * LITRES_PER_100KM) / 100)
+      : null,
     industrialSource,
     // Prefer the routed time. The straight-line estimate remains only as a
     // fallback, and is flagged as such by `routed: false`.

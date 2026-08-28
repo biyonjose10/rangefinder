@@ -6,6 +6,7 @@ import { treeCoverAt } from "./forest";
 import { listAois, loadAoiData, loadCachedAlerts, resolveAoi, type AoiMeta } from "./aoi";
 import { fetchLiveAlerts } from "./sources/firms";
 import { DEMO_MODE } from "./config";
+import { fetchAreaWeather, weatherNote, type AreaWeather } from "./sources/weather";
 import type { Alert, RangerPost, ScoredTarget } from "./types";
 
 /**
@@ -49,6 +50,11 @@ export interface TargetsPayload {
   generatedAt: string;
   elapsedMs: number;
   targets: ScoredTarget[];
+  /** Null when the weather service could not be reached — it is context, not a
+   *  dependency, so its absence must not block the queue. */
+  weather: AreaWeather | null;
+  /** Plain-language caveat about observability or trafficability. */
+  weatherNote: string | null;
 }
 
 async function loadAlerts(
@@ -85,10 +91,14 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
   const meta = await resolveAoi(slug);
   if (!meta) return null;
 
-  const [{ alerts, live, note }, data, available] = await Promise.all([
+  const centreLat = (meta.bbox.south + meta.bbox.north) / 2;
+  const centreLon = (meta.bbox.west + meta.bbox.east) / 2;
+
+  const [{ alerts, live, note }, data, available, weather] = await Promise.all([
     loadAlerts(meta),
     loadAoiData(meta),
     listAois(),
+    DEMO_MODE ? Promise.resolve(null) : fetchAreaWeather(centreLat, centreLon),
   ]);
 
   const clusters = clusterAlerts(alerts);
@@ -133,5 +143,7 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
     generatedAt: new Date().toISOString(),
     elapsedMs: Date.now() - started,
     targets,
+    weather,
+    weatherNote: weather ? weatherNote(weather, alerts.length) : null,
   };
 }

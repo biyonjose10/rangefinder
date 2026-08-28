@@ -35,6 +35,8 @@ interface Payload {
   counts: { detections: number; events: number; roadSegments: number; protectedAreas: number };
   generatedAt: string;
   targets: ScoredTarget[];
+  weather: { cloudCoverPct: number; observationLimited: boolean } | null;
+  weatherNote: string | null;
 }
 
 const FACTORS: { key: keyof ScoredTarget["breakdown"]; label: string }[] = [
@@ -227,6 +229,24 @@ export default function Home() {
             <span className="kicker">ranked by actionability</span>
           </div>
 
+          {shown?.weatherNote && (
+            <div
+              className="border-b px-4 py-2 text-[11px] leading-snug"
+              style={{
+                borderColor: "var(--line-soft)",
+                background: shown.weather?.observationLimited
+                  ? "rgba(249,115,22,.08)"
+                  : "transparent",
+                color: shown.weather?.observationLimited
+                  ? "var(--danger)"
+                  : "var(--muted)",
+              }}
+            >
+              {shown.weather?.observationLimited ? "⚠ " : ""}
+              {shown.weatherNote}
+            </div>
+          )}
+
           <div className="scroll-slim min-h-0 flex-1 overflow-y-auto">
             {error && <p className="p-4 text-sm text-[var(--alarm)]">Failed to load: {error}</p>}
             {!shown && !error && <SkeletonList />}
@@ -345,8 +365,11 @@ function TargetRow({
               >
                 {severityLabel(t.score)}
               </span>
+              {/* Rounded to whole numbers. The decimal implied a precision the
+                  weights cannot support; the rank-stability panel below carries
+                  the real uncertainty. */}
               <span className="mono text-[13px] font-bold" style={{ color: colour }}>
-                {t.score.toFixed(1)}
+                {Math.round(t.score)}
               </span>
             </span>
           </div>
@@ -363,7 +386,9 @@ function TargetRow({
             <span>{Math.round(t.frpSum)} MW</span>
             <span>
               {t.routed && t.routeKm !== null
-                ? `${t.routeKm.toFixed(0)} km road · ${t.driveTimeHours.toFixed(1)} h`
+                ? `${t.routeKm.toFixed(0)} km road · ${t.driveTimeHours.toFixed(1)} h${
+                    t.fuelLitres ? ` · ${t.fuelLitres} L` : ""
+                  }`
                 : `no road route`}
             </span>
           </div>
