@@ -11,8 +11,23 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   loading: () => <div className="absolute inset-0 grid place-items-center text-[var(--dim)] text-sm">Loading terrain…</div>,
 });
 
+interface AoiOption {
+  slug: string;
+  label: string;
+  subtitle?: string;
+}
+
 interface Payload {
-  aoi: { label: string; south: number; west: number; north: number; east: number };
+  aoi: {
+    label: string;
+    subtitle?: string;
+    slug: string;
+    south: number;
+    west: number;
+    north: number;
+    east: number;
+  };
+  available: AoiOption[];
   post: RangerPost;
   live: boolean;
   note?: string;
@@ -56,6 +71,9 @@ const scoreColour = (s: number) =>
   s >= 60 ? "#ef4444" : s >= 50 ? "#f97316" : s >= 40 ? "#eab308" : "#84cc16";
 
 export default function Home() {
+  // Which area of operations we are looking at. Everything else — targets,
+  // boundaries, imagery, the road graph — is derived from this.
+  const [aoi, setAoi] = useState<string | null>(null);
   const [data, setData] = useState<Payload | null>(null);
   const [areas, setAreas] = useState<ProtectedArea[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -66,26 +84,44 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/targets")
+    const q = aoi ? `?aoi=${encodeURIComponent(aoi)}` : "";
+    let cancelled = false;
+
+    fetch(`/api/targets${q}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
       .then((d: Payload) => {
+        if (cancelled) return;
         setData(d);
         setSelected(d.targets[0]?.id ?? null);
+        setFocus(null);
+        setError(null);
+        if (!aoi) setAoi(d.aoi.slug);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => !cancelled && setError(String(e)));
 
-    fetch("/api/protected-areas")
+    fetch(`/api/protected-areas${q}`)
       .then((r) => (r.ok ? r.json() : []))
-      .then(setAreas)
-      .catch(() => setAreas([]));
+      .then((a) => !cancelled && setAreas(a))
+      .catch(() => !cancelled && setAreas([]));
 
-    fetch("/api/verification")
+    fetch(`/api/verification${q}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then(setVerif)
-      .catch(() => setVerif(null));
-  }, []);
+      .then((v) => !cancelled && setVerif(v))
+      .catch(() => !cancelled && setVerif(null));
 
-  const top = useMemo(() => data?.targets.slice(0, 12) ?? [], [data]);
+    return () => {
+      cancelled = true;
+    };
+  }, [aoi]);
+
+  // While a switch is in flight the previous area's payload is still in state.
+  // Treating it as stale at render — rather than clearing it in an effect —
+  // keeps the old targets from being drawn against the new area's map without
+  // setting state during the effect body.
+  const stale = data !== null && aoi !== null && data.aoi.slug !== aoi;
+  const shown = stale ? null : data;
+
+  const top = useMemo(() => shown?.targets.slice(0, 12) ?? [], [shown]);
 
   return (
     <main className="flex h-screen flex-col overflow-hidden">
@@ -104,36 +140,54 @@ export default function Home() {
         <div className="hidden h-8 w-px bg-[var(--line)] sm:block" />
 
         <div className="hidden min-w-0 sm:block">
-          <div className="kicker">Area of operations</div>
-          <div className="truncate text-[13px] font-medium">
-            {data?.aoi.label ?? "—"}
-          </div>
+          <label className="kicker" htmlFor="aoi-select">
+            Area of operations
+          </label>
+          {shown && shown.available.length > 1 ? (
+            <select
+              id="aoi-select"
+              value={shown.aoi.slug}
+              onChange={(e) => setAoi(e.target.value)}
+              className="block w-full cursor-pointer truncate rounded border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1 text-[13px] font-medium text-[var(--text)] outline-none focus:border-[var(--accent-dim)]"
+            >
+              {shown.available.map((a) => (
+                <option key={a.slug} value={a.slug}>
+                  {a.label}
+                  {a.subtitle ? ` — ${a.subtitle}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="truncate text-[13px] font-medium">
+              {shown ? `${shown.aoi.label}${shown.aoi.subtitle ? ` — ${shown.aoi.subtitle}` : ""}` : "—"}
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-5">
-          {data && (
+          {shown && (
             <>
-              <Stat value={data.counts.detections.toLocaleString()} label="detections / 24h" />
-              <Stat value={String(data.counts.events)} label="clearing events" />
+              <Stat value={shown.counts.detections.toLocaleString()} label="detections / 24h" />
+              <Stat value={String(shown.counts.events)} label="clearing events" />
               <div
                 className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium"
                 style={{
-                  borderColor: data.live ? "var(--accent-dim)" : "var(--line)",
-                  color: data.live ? "var(--accent)" : "var(--muted)",
+                  borderColor: shown.live ? "var(--accent-dim)" : "var(--line)",
+                  color: shown.live ? "var(--accent)" : "var(--muted)",
                 }}
-                title={data.note ?? "Fetched from NASA FIRMS moments ago"}
+                title={shown.note ?? "Fetched from NASA FIRMS moments ago"}
               >
                 <span
                   className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: data.live ? "var(--accent)" : "var(--dim)" }}
+                  style={{ background: shown.live ? "var(--accent)" : "var(--dim)" }}
                 />
-                {data.live ? "LIVE" : "CACHED"}
+                {shown.live ? "LIVE" : "CACHED"}
               </div>
             </>
           )}
 
           <a
-            href="/api/patrol-order"
+            href={shown ? `/api/patrol-order?aoi=${shown.aoi.slug}` : "/api/patrol-order"}
             target="_blank"
             rel="noopener"
             className="rounded-md bg-[var(--accent)] px-3.5 py-2 text-[13px] font-semibold text-[#06120c] transition hover:brightness-110 active:brightness-95"
@@ -146,14 +200,16 @@ export default function Home() {
       {/* ---------- body ---------- */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="relative min-h-[38vh] flex-1 lg:min-h-0">
-          {data && (
+          {shown && (
             <MapView
+              key={shown.aoi.slug}
               targets={top}
-              post={data.post}
+              post={shown.post}
               protectedAreas={areas}
               selectedId={selected}
               focusId={focus}
-              bounds={data.aoi}
+              bounds={shown.aoi}
+              aoiSlug={shown.aoi.slug}
               onSelect={(id) => {
                 setSelected(id);
                 setFocus(id);
@@ -171,13 +227,14 @@ export default function Home() {
 
           <div className="scroll-slim min-h-0 flex-1 overflow-y-auto">
             {error && <p className="p-4 text-sm text-[var(--alarm)]">Failed to load: {error}</p>}
-            {!data && !error && <SkeletonList />}
+            {!shown && !error && <SkeletonList />}
             {top.map((t, i) => (
               <TargetRow
                 key={t.id}
                 target={t}
                 rank={i + 1}
                 open={t.id === selected}
+                aoiSlug={shown!.aoi.slug}
                 verification={
                   verif &&
                   verif.ndvi_available &&
@@ -252,12 +309,14 @@ function TargetRow({
   target: t,
   rank,
   open,
+  aoiSlug,
   verification,
   onClick,
 }: {
   target: ScoredTarget;
   rank: number;
   open: boolean;
+  aoiSlug: string;
   verification: Verification | null;
   onClick: () => void;
 }) {
@@ -366,7 +425,7 @@ function TargetRow({
 
               {t.robustness && <RobustnessBar r={t.robustness} colour={colour} />}
 
-              {verification && <NdviPanel v={verification} />}
+              {verification && <NdviPanel v={verification} aoiSlug={aoiSlug} />}
             </div>
           )}
         </div>
@@ -393,7 +452,7 @@ function TargetRow({
  * confounder plainly, because a judge or a ranger acting on this deserves the
  * honest version rather than the flattering one.
  */
-function NdviPanel({ v }: { v: Verification }) {
+function NdviPanel({ v, aoiSlug }: { v: Verification; aoiSlug: string }) {
   const raw = v.ndvi_delta_after_minus_before;
   const control = v.control?.delta ?? null;
   const corrected = v.corrected_delta ?? null;
@@ -430,8 +489,8 @@ function NdviPanel({ v }: { v: Verification }) {
 
       <div className="flex gap-2">
         {[
-          { label: "Before", src: "/imagery/before.png", d: v.before },
-          { label: "After", src: "/imagery/after.png", d: v.after },
+          { label: "Before", src: `/aoi/${aoiSlug}/imagery/before.png`, d: v.before },
+          { label: "After", src: `/aoi/${aoiSlug}/imagery/after.png`, d: v.after },
         ].map((c) => (
           <figure key={c.label} className="min-w-0 flex-1">
             {/* eslint-disable-next-line @next/next/no-img-element */}

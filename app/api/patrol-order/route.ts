@@ -2,13 +2,14 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 
 import { PatrolOrder } from "@/lib/pdf/PatrolOrder";
-import { PATROL_ORDER_SIZE, AOI_LABEL } from "@/lib/config";
+import { PATROL_ORDER_SIZE } from "@/lib/config";
 import type { RangerPost, ScoredTarget } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface TargetsPayload {
+  aoi: { label: string; subtitle?: string };
   post: RangerPost;
   live: boolean;
   counts: { detections: number; events: number };
@@ -24,9 +25,11 @@ function makeOrderId(now: Date): string {
 }
 
 export async function GET(request: Request) {
-  const origin = new URL(request.url).origin;
+  const url = new URL(request.url);
+  const aoi = url.searchParams.get("aoi");
+  const q = aoi ? `?aoi=${encodeURIComponent(aoi)}` : "";
 
-  const res = await fetch(`${origin}/api/targets`, { cache: "no-store" });
+  const res = await fetch(`${url.origin}/api/targets${q}`, { cache: "no-store" });
   if (!res.ok) {
     return new Response(`Upstream targets endpoint failed: ${res.status}`, {
       status: 502,
@@ -50,7 +53,9 @@ export async function GET(request: Request) {
     React.createElement(PatrolOrder, {
       orderId,
       issuedAt: now,
-      aoiLabel: AOI_LABEL,
+      aoiLabel: data.aoi.subtitle
+        ? `${data.aoi.label} — ${data.aoi.subtitle}`
+        : data.aoi.label,
       post: data.post,
       targets,
       totalDetections: data.counts.detections,

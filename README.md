@@ -135,6 +135,35 @@ An earlier draft approximated each protected area as a disc around its centroid 
 
 The fix was to stop approximating. `lib/geo.ts` now ray-casts each coordinate against the actual 3,805-node OSM boundary (`pointInRings`), and the true answer for this AOI is that the big fires are outside the park. A tool that is occasionally slow is a nuisance. A tool that is confidently wrong about legality is a liability — this is documented here because getting that distinction right, and admitting the near-miss, is more important than the geometry being clever.
 
+## Working anywhere
+
+Rangefinder is not a Brazil tool. Nothing about a place is compiled into the
+code — an area of operations is a folder under `data/aoi/<slug>/`, discovered at
+runtime, so the picker in the header lists whatever is on disk.
+
+Adding a new one is a single command:
+
+```bash
+python scripts/setup_aoi.py     --slug kalimantan-sebangau     --label "Sebangau Peatlands"     --subtitle "Central Kalimantan, Indonesia"     --south -2.6 --west 113.4 --north -1.6 --east 114.4     --region southeast_asia
+```
+
+That fetches and builds everything the area needs from open sources — FIRMS
+detections, the OSM road network (full resolution for routing, simplified for
+the browser), protected-area boundaries stitched from OSM relations, the nearest
+settlement as a ranger post, and an ESA WorldCover tree-cover baseline. Restart,
+and the area appears in the picker. No code change.
+
+Use `--dry-run` first to see exactly what it will fetch and write. Valid
+`--region` values are the FIRMS regional feeds listed in `lib/sources/firms.ts`
+(`south_america`, `southeast_asia`, `northern_and_central_africa`,
+`southern_africa`, `south_asia`, `europe`, `russia_asia`, `global`).
+
+Two caveats worth knowing. Routing and the forest grid are built over a box
+padded by 0.5°, because the nearest town — and therefore the ranger post — is
+usually outside the area itself; without the pad, routing fails for every
+target. And the Sentinel-2 NDVI panel is per-area and optional: only areas with
+an `ndvi.json` show it.
+
 ## Quickstart
 
 ```bash

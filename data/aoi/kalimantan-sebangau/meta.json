@@ -1,0 +1,30 @@
+{
+  "slug": "kalimantan-sebangau",
+  "label": "Sebangau Peatlands",
+  "subtitle": "Central Kalimantan, Indonesia",
+  "bbox": {
+    "south": -2.6,
+    "west": 113.4,
+    "north": -1.6,
+    "east": 114.4
+  },
+  "region": "southeast_asia",
+  "post": {
+    "name": "Palangka Raya",
+    "lat": -2.2072919,
+    "lon": 113.9164372
+  },
+  "hasImagery": false,
+  "generatedAt": "2026-08-28T15:59:32.483776+00:00",
+  "_meta": {
+    "source": "NASA FIRMS; OpenStreetMap via Overpass; ESA WorldCover",
+    "licence": "NASA open data; ODbL 1.0 (c) OpenStreetMap contributors; CC BY 4.0",
+    "fetchedAt": "2026-08-28T15:59:32.483791+00:00",
+    "aoi": {
+      "south": -2.6,
+      "west": 113.4,
+      "north": -1.6,
+      "east": 114.4
+    }
+  }
+}

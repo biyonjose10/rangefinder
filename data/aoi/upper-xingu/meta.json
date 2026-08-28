@@ -1,0 +1,19 @@
+{
+  "slug": "upper-xingu",
+  "label": "Upper Xingu Basin",
+  "subtitle": "Mato Grosso, Brazil",
+  "bbox": {
+    "south": -12.6,
+    "west": -54.6,
+    "north": -10.3,
+    "east": -53.0
+  },
+  "region": "south_america",
+  "post": {
+    "name": "Peixoto de Azevedo",
+    "lat": -10.2429203,
+    "lon": -54.9919857
+  },
+  "hasImagery": true,
+  "generatedAt": "2026-08-28T15:49:13.482327+00:00"
+}

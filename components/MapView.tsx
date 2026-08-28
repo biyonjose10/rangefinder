@@ -26,6 +26,8 @@ interface Props {
    *  copy of the AOI lived here and had to be kept in step with lib/config.ts
    *  by hand — which is exactly the kind of duplication that silently rots. */
   bounds: { south: number; west: number; north: number; east: number };
+  /** Area slug, used to reach that area's road geometry and routing endpoint. */
+  aoiSlug: string;
   onSelect: (id: string) => void;
 }
 
@@ -70,6 +72,7 @@ export default function MapView({
   selectedId,
   focusId,
   bounds,
+  aoiSlug,
   onSelect,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
@@ -153,7 +156,7 @@ export default function MapView({
       // decoration: it is why a small fire beside a track can outrank a large
       // one 4 km into the bush, and the ranger can see the reason rather than
       // taking the number on faith.
-      m.addSource("roads", { type: "geojson", data: "/roads.geojson" });
+      m.addSource("roads", { type: "geojson", data: `/aoi/${aoiSlug}/roads.geojson` });
       m.addLayer({
         id: "roads-line",
         type: "line",
@@ -176,10 +179,25 @@ export default function MapView({
         type: "circle",
         source: "detections",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 2, 12, 5],
+          // Sized to the sensor's real footprint rather than an arbitrary dot.
+          // A VIIRS I-band detection covers about 375 m on the ground (measured
+          // at 403-405 m between neighbours in this scene, off nadir), so an
+          // exponential base-2 ramp keeps each mark roughly that wide at every
+          // zoom. Past zoom ~11 the marks resolve into the sensor's own
+          // lattice, which is what the raw data actually is — a grid of
+          // pixels that registered heat, not a scatter of points.
+          "circle-radius": [
+            "interpolate",
+            ["exponential", 2],
+            ["zoom"],
+            6, 1.5,
+            10, 1.6,
+            12, 5,
+            14, 19,
+          ],
           "circle-color": "#fb923c",
-          "circle-opacity": 0.65,
-          "circle-blur": 0.3,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.65, 13, 0.5],
+          "circle-blur": 0.25,
         },
       });
 
@@ -221,7 +239,9 @@ export default function MapView({
       map.current = null;
       setReady(false);
     };
-  }, []);
+    // `aoiSlug` is fixed for the life of this component — the parent remounts
+    // MapView with a new key when the area changes — so this stays one-shot.
+  }, [aoiSlug]);
 
   // ----------------------------------------------------- protected-area layer
   // Added in its own effect rather than alongside the others: the boundary
@@ -341,7 +361,7 @@ export default function MapView({
     }
 
     let cancelled = false;
-    fetch(`/api/route-to?lat=${t.lat}&lon=${t.lon}`)
+    fetch(`/api/route-to?aoi=${encodeURIComponent(aoiSlug)}&lat=${t.lat}&lon=${t.lon}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled) return;
@@ -384,7 +404,7 @@ export default function MapView({
     return () => {
       cancelled = true;
     };
-  }, [focusId, targets, ready]);
+  }, [focusId, targets, ready, aoiSlug]);
 
   // ------------------------------------------------------------- fly on focus
   useEffect(() => {

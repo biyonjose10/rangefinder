@@ -39,6 +39,8 @@ from rasterio.enums import Resampling
 
 # ---------------------------------------------------------------- config --
 
+# Defaults preserve the original Upper Xingu behaviour; setup_aoi.py overrides
+# both the box and the destination so any area can be built with the same code.
 BBOX = {"south": -12.75, "west": -55.30, "north": -10.05, "east": -52.85}
 CELL_DEG = 0.01
 SAMPLES_PER_CELL_EDGE = 20          # -> ~400 sample points per output cell
@@ -85,7 +87,28 @@ def tile_url(la, lo):
     return f"/vsicurl/{BASE_URL}/{TILE_NAME.format(ns=ns, ew=ew)}"
 
 
+def _parse_cli():
+    """Optional CLI so this can be driven per-area by scripts/setup_aoi.py."""
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Build an ESA WorldCover tree-cover grid.")
+    ap.add_argument("--south", type=float)
+    ap.add_argument("--west", type=float)
+    ap.add_argument("--north", type=float)
+    ap.add_argument("--east", type=float)
+    ap.add_argument("--out", help="destination JSON path")
+    a = ap.parse_args()
+
+    global BBOX, OUT_PATH
+    if None not in (a.south, a.west, a.north, a.east):
+        BBOX = {"south": a.south, "west": a.west, "north": a.north, "east": a.east}
+    if a.out:
+        OUT_PATH = a.out
+    return a
+
+
 def main():
+    _parse_cli()
     south, west, north, east = BBOX["south"], BBOX["west"], BBOX["north"], BBOX["east"]
     rows = round((north - south) / CELL_DEG)
     cols = round((east - west) / CELL_DEG)
@@ -183,6 +206,7 @@ def main():
         "data": data,
     }
 
+    os.makedirs(os.path.dirname(os.path.abspath(OUT_PATH)), exist_ok=True)
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
 

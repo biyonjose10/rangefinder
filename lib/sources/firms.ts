@@ -13,15 +13,25 @@ import type { Alert } from "../types";
  * Licence: NASA open data — free and unrestricted use, attribution requested.
  */
 
+const CSV = (region: string) =>
+  `https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_${region}_24h.csv`;
+
+/**
+ * The regional 24-hour files FIRMS actually publishes.
+ *
+ * These names are not guessable — there is no "Africa" or "North_America"
+ * file, and an earlier version of this list assumed both existed. Verified
+ * against the live endpoint; anything not listed here returns 404.
+ */
 export const FIRMS_SOURCES = {
-  south_america:
-    "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_South_America_24h.csv",
-  africa:
-    "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Africa_24h.csv",
-  south_asia:
-    "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_South_Asia_24h.csv",
-  southeast_asia:
-    "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_SouthEast_Asia_24h.csv",
+  south_america: CSV("South_America"),
+  northern_and_central_africa: CSV("Northern_and_Central_Africa"),
+  southern_africa: CSV("Southern_Africa"),
+  south_asia: CSV("South_Asia"),
+  southeast_asia: CSV("SouthEast_Asia"),
+  europe: CSV("Europe"),
+  russia_asia: CSV("Russia_Asia"),
+  global: CSV("Global"),
 } as const;
 
 export type FirmsRegion = keyof typeof FIRMS_SOURCES;
