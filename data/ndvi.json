@@ -1,0 +1,23 @@
+{
+  "point": {
+    "lat": -10.8,
+    "lon": -54.0
+  },
+  "chip_size_deg": 0.02,
+  "ndvi_available": true,
+  "before": {
+    "item_id": "S2C_MSIL2A_20250929T134721_R024_T21LZJ_20250929T184014",
+    "scene_date": "2025-09-29T13:47:21.025000Z",
+    "cloud_cover_pct": 0.000324,
+    "mean_ndvi": 0.47501376271247864
+  },
+  "after": {
+    "item_id": "S2A_MSIL2A_20260827T135131_R024_T21LZJ_20260827T233711",
+    "scene_date": "2026-08-27T13:51:31.024000Z",
+    "cloud_cover_pct": 0.001546,
+    "mean_ndvi": 0.40815338492393494
+  },
+  "ndvi_delta_after_minus_before": -0.0668603777885437,
+  "source": "Microsoft Planetary Computer STAC API, collection sentinel-2-l2a, assets visual/B04/B08",
+  "generated_at_utc": "2026-08-28T09:41:49.827130+00:00"
+}
