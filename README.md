@@ -60,7 +60,7 @@ flowchart LR
     E --> F[Patrol Dispatch Order<br/>PDF]
 ```
 
-1. **Fetch** — `lib/sources/firms.ts` pulls the live NASA FIRMS VIIRS NOAA-20 bulk regional CSV (no API key required) and clips it to the demo Area of Interest.
+1. **Fetch** — `lib/sources/firms.ts` pulls the live NASA FIRMS VIIRS bulk regional CSVs for **three satellites** (NOAA-20, Suomi-NPP and NOAA-21; no API key required), clips them to the area, and merges them with spatio-temporal deduplication. Each platform crosses at a different local solar time, so a fire that starts and ends between one satellite's overpasses is invisible to it but plain in another's feed.
 2. **Cluster** — `lib/cluster.ts` runs DBSCAN (1,500 m radius) over the raw detections. VIIRS reports one row per 375 m pixel, so a single clearing produces dozens of rows; clustering first is what turns a pixel dump into a list of distinct clearing *events*.
 3. **Score** — `lib/score.ts` scores every event against roads and protected-area geometry and produces an explicit, inspectable **Actionability Score** (see below).
 4. **Render** — the ranked queue drives a dark MapLibre GL map and a sidebar list (`app/page.tsx`, `components/MapView.tsx`), each entry showing its score breakdown and a plain-English rationale.
@@ -87,16 +87,26 @@ The weights and rationale live in `lib/score.ts`, alongside a rough one-way trav
 
 ## The Xingu finding
 
-Running the pipeline against the Upper Xingu Basin AOI on 2026-08-28:
+Running the pipeline against the two configured areas on 2026-08-28:
 
-- **13,733** VIIRS detections across South America in the preceding 24 hours
-- **394** of those fall inside the demo AOI
-- clustered into **10** distinct clearing events
-- **4,216** OpenStreetMap road segments used for the access analysis
-- Parque Indígena do Xingu boundary: a **3,805-node** polygon, tested with real point-in-polygon containment
-- End-to-end `/api/targets` response: **~200 ms**
+| | Upper Xingu (Brazil) | Sebangau (Indonesia) |
+|---|---|---|
+| Detections in 24 h, three satellites merged | **1,047** | **3,697** |
+| Distinct clearing events after clustering | **17** | **115** |
+| OSM road segments behind the routing and access analysis | 8,067 | 45,489 |
+| Road-graph nodes | 120,646 | 411,494 |
+| Protected-area boundary | Parque Indígena do Xingu, 3,805 nodes | Taman Nasional Sebangau, 185 nodes |
+| `/api/targets` response | ~4.5 s | ~11 s |
 
-The top-ranked target is a 103-detection, 1,282 MW fire on unclassified tenure — big, easy to reach, and legally unremarkable. **Rank 5** is a fire with just **2 detections**, scoring 55.4 — because it sits inside Parque Indígena do Xingu, legally protected indigenous territory, where clearing is prima facie illegal. On a heatmap that second fire is invisible; on the patrol queue it is a named target with a reason attached. That contrast — a huge legal fire outranked in urgency by a tiny illegal one — is the whole argument for triage over visualisation.
+**Sebangau's top-ranked target is a fire inside Taman Nasional Sebangau** — 37
+detections, 1,287 MW, on land that was 97% closed forest at baseline, 25 km by
+road from the ranger post. In Upper Xingu the highest-ranked protected-land
+target has just **two detections**: invisible on a heatmap, a named target with
+a reason attached on the patrol queue.
+
+That contrast — large legal fires outranked by small illegal ones — is the whole
+argument for triage over visualisation. Every figure above is reproducible from
+the live API; none is illustrative.
 
 ### Sentinel-2 NDVI — and why the headline figure was wrong
 
