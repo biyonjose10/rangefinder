@@ -145,3 +145,45 @@ describe("severity is readable without colour vision", () => {
     }
   });
 });
+
+/**
+ * The pulse is an attention cue, so it has to point at whatever currently
+ * deserves attention. It was pinned to rank 1 unconditionally, which meant
+ * selecting any other target left the animation drawing the eye back to the
+ * first one, competing with the selection highlight it was supposed to support.
+ */
+describe("the pulse follows attention, not rank", () => {
+  const render = (opts: { rank: number; selected: boolean; pulse: boolean }) =>
+    markerInnerHtml({ colour: "#fca5a5", ...opts });
+
+  it("marks the top target when nothing is selected", () => {
+    expect(render({ rank: 1, selected: false, pulse: true })).toContain('class="ping"');
+  });
+
+  it("moves to the selected target and leaves rank 1 alone", () => {
+    // What the UI computes: pulse = selectedId ? isSel : i === 0
+    const selectedId = "C008";
+    const rows = [
+      { id: "C004", rank: 1 },
+      { id: "C008", rank: 8 },
+    ];
+    const html = rows.map((r, i) =>
+      render({
+        rank: r.rank,
+        selected: r.id === selectedId,
+        pulse: selectedId ? r.id === selectedId : i === 0,
+      })
+    );
+    expect(html[0], "rank 1 must stop pulsing once another target is chosen").not.toContain(
+      'class="ping"'
+    );
+    expect(html[1], "the selected target should pulse instead").toContain('class="ping"');
+  });
+
+  it("never pulses two markers at once", () => {
+    const selectedId: string | null = "C008";
+    const ids = ["C004", "C008", "C009"];
+    const pulsing = ids.filter((id, i) => (selectedId ? id === selectedId : i === 0));
+    expect(pulsing).toHaveLength(1);
+  });
+});

@@ -332,7 +332,12 @@ export default function MapView({
         rank: i + 1,
         colour,
         selected: isSel,
-        pulse: i === 0,
+        // The pulse points at whatever deserves attention *now*. With nothing
+        // selected that is the top-ranked target; once the user has chosen one
+        // it is their choice. Previously it was pinned to rank 1 regardless, so
+        // after selecting target 8 the animation carried on drawing the eye
+        // back to target 1 and competed with the selection highlight.
+        pulse: selectedId ? isSel : i === 0,
       });
       el.title = `#${i + 1} · ${t.count} detections · actionability ${t.score.toFixed(1)}`;
       el.addEventListener("click", (e) => {
