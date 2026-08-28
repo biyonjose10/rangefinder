@@ -2,7 +2,7 @@
 
 Deforestation alerting is a solved problem. Deciding which alert to drive to first is not — Rangefinder turns a firehose of satellite fire detections into a short, ranked, printable patrol order.
 
-<!-- screenshot: docs/screenshot.png -->
+![Rangefinder — the road-gridded agricultural frontier on the west, the roadless Parque Indígena do Xingu on the east, live fire detections ranked between them](docs/screenshot.jpg)
 
 Built for **Hack the Habitat** (theme: tech that protects the planet's ecosystems, climate and wildlife).
 
