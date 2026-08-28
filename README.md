@@ -98,7 +98,36 @@ Running the pipeline against the Upper Xingu Basin AOI on 2026-08-28:
 
 The top-ranked target is a 103-detection, 1,282 MW fire on unclassified tenure — big, easy to reach, and legally unremarkable. **Rank 5** is a fire with just **2 detections**, scoring 55.4 — because it sits inside Parque Indígena do Xingu, legally protected indigenous territory, where clearing is prima facie illegal. On a heatmap that second fire is invisible; on the patrol queue it is a named target with a reason attached. That contrast — a huge legal fire outranked in urgency by a tiny illegal one — is the whole argument for triage over visualisation.
 
-We also verified the trend independently: Sentinel-2 NDVI at (-10.8, -54.0) fell from **0.4750** (scene dated 2025-09-29, 0.0003% cloud) to **0.4082** (scene dated 2026-08-27, 0.0015% cloud) — a delta of **-0.0669**, consistent with vegetation loss over the intervening period.
+### Sentinel-2 NDVI — and why the headline figure was wrong
+
+An earlier version of this README reported that NDVI at (-10.8, -54.0) fell from 0.4750 to
+0.4082 — a delta of **-0.0669** — and called it vegetation loss. That was not a safe
+inference, and the correction is worth reading.
+
+The two scenes are 2025-09-29 and 2026-08-27: eleven months apart, in **different calendar
+months**. Vegetation index moves seasonally on its own, so an unknown share of that drop
+was simply the annual cycle rather than anything happening on the ground.
+
+`scripts/ndvi_with_control.py` fixes this with a **spatial control** — undisturbed forest
+19.8 km away (99.99% tree cover in WorldCover, zero FIRMS detections within 5.5 km),
+sampled from the *same two images*, so it shares season, sun angle, sensor and atmosphere
+by construction. Whatever the control moved is the seasonal baseline.
+
+| | NDVI delta |
+|---|---|
+| Raw drop at target | −0.0667 |
+| Undisturbed control, same scenes | −0.0477 |
+| **Corrected (target − control)** | **−0.0190** |
+
+**About 71% of the original figure was seasonality.** The corrected residual is still
+negative and consistent with some genuine localised decline, but it is small — and it is
+further confounded by roughly **20% smoke-like pixels in the after image**, which
+Sentinel-2's SCL cloud mask does not flag (SCL is built for cloud, not smoke). Some or all
+of the remaining −0.019 could be smoke attenuation rather than canopy loss.
+
+Stated plainly: **this evidence does not support a claim of large-scale canopy loss at this
+point.** It supports, at most, a modest and uncertain decline. The stronger evidence that
+these targets are on forest is the WorldCover baseline above, not this NDVI figure.
 
 ### A wrong turn worth keeping in the record
 

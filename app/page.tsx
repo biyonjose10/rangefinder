@@ -12,7 +12,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 });
 
 interface Payload {
-  aoi: { label: string };
+  aoi: { label: string; south: number; west: number; north: number; east: number };
   post: RangerPost;
   live: boolean;
   note?: string;
@@ -23,6 +23,7 @@ interface Payload {
 
 const FACTORS: { key: keyof ScoredTarget["breakdown"]; label: string }[] = [
   { key: "extent", label: "Extent" },
+  { key: "forest", label: "Forest" },
   { key: "protection", label: "Protection" },
   { key: "recency", label: "Recency" },
   { key: "access", label: "Access" },
@@ -36,6 +37,15 @@ interface Verification {
   before: { scene_date: string; cloud_cover_pct: number; mean_ndvi: number };
   after: { scene_date: string; cloud_cover_pct: number; mean_ndvi: number };
   ndvi_delta_after_minus_before: number;
+  corrected_delta?: number;
+  smoke_like_pixel_fraction_after?: number;
+  control?: {
+    lat: number;
+    lon: number;
+    delta: number;
+    distance_from_target_km: number;
+    worldcover_tree_pct: number;
+  };
 }
 
 /** The imagery was computed for one point. Only offer it to a target that
@@ -143,6 +153,7 @@ export default function Home() {
               protectedAreas={areas}
               selectedId={selected}
               focusId={focus}
+              bounds={data.aoi}
               onSelect={(id) => {
                 setSelected(id);
                 setFocus(id);
@@ -286,14 +297,38 @@ function TargetRow({
             </span>
             <span>{t.spanKm.toFixed(1)} km front</span>
             <span>{Math.round(t.frpSum)} MW</span>
-            <span>{t.driveTimeHours.toFixed(1)} h out</span>
+            <span>
+              {t.routed && t.routeKm !== null
+                ? `${t.routeKm.toFixed(0)} km road · ${t.driveTimeHours.toFixed(1)} h`
+                : `no road route`}
+            </span>
           </div>
 
-          {t.protectedArea && (
-            <div className="mt-1.5 inline-block rounded border border-[var(--accent-dim)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
-              INSIDE PROTECTED TERRITORY
-            </div>
-          )}
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {t.protectedArea && (
+              <span className="rounded border border-[var(--accent-dim)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
+                INSIDE PROTECTED TERRITORY
+              </span>
+            )}
+            {t.treeCoverPct !== null && (
+              <span
+                className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                style={
+                  t.treeCoverPct >= 60
+                    ? { borderColor: "var(--accent-dim)", color: "var(--accent)" }
+                    : { borderColor: "var(--line)", color: "var(--danger)" }
+                }
+                title="Tree cover at the ESA WorldCover 2021 baseline. Fire on land that was already cleared is probably agricultural."
+              >
+                {Math.round(t.treeCoverPct)}% FOREST BASELINE
+              </span>
+            )}
+            {!t.routed && (
+              <span className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--danger)]">
+                NO VEHICLE ROUTE
+              </span>
+            )}
+          </div>
 
           {open && (
             <div className="mt-3 space-y-2.5">
@@ -329,6 +364,8 @@ function TargetRow({
                 ))}
               </ul>
 
+              {t.robustness && <RobustnessBar r={t.robustness} colour={colour} />}
+
               {verification && <NdviPanel v={verification} />}
             </div>
           )}
@@ -341,27 +378,53 @@ function TargetRow({
 /**
  * Sentinel-2 corroboration for a single target.
  *
- * A thermal detection says "something here is hot". It does not say "forest was
- * removed" — a fire on already-cleared pasture looks identical from orbit. The
- * NDVI drop between two cloud-free scenes a year apart is the check that
- * distinguishes the two, and it is the difference between dispatching a crew on
- * a heat signature and dispatching them on evidence.
+ * The first version of this panel reported a raw NDVI drop of -0.0667 between
+ * two scenes and called it canopy loss. That was wrong, and the error was
+ * instructive: the scenes are eleven months and two calendar months apart, so
+ * an unknown share of the drop was simply the seasonal cycle.
+ *
+ * The fix is a spatial control — undisturbed forest ~20 km away, sampled from
+ * the *same two images*, so it shares the season, sun angle, sensor and
+ * atmosphere by construction. Whatever the control moved is the baseline.
+ * Subtracting it leaves the part attributable to disturbance, and here that is
+ * about a quarter of the headline figure.
+ *
+ * The panel now leads with the corrected number and states the residual
+ * confounder plainly, because a judge or a ranger acting on this deserves the
+ * honest version rather than the flattering one.
  */
 function NdviPanel({ v }: { v: Verification }) {
-  const drop = v.ndvi_delta_after_minus_before;
+  const raw = v.ndvi_delta_after_minus_before;
+  const control = v.control?.delta ?? null;
+  const corrected = v.corrected_delta ?? null;
+  const smoke = v.smoke_like_pixel_fraction_after ?? 0;
   const day = (iso: string) => iso.slice(0, 10);
-  const pct = (n: number) => (n < 0.01 ? "<0.01" : n.toFixed(2));
+
+  const rows: { label: string; value: number; hint: string; dim?: boolean }[] = [
+    { label: "Raw drop at target", value: raw, hint: "before → after", dim: true },
+  ];
+  if (control !== null) {
+    rows.push({
+      label: "Undisturbed control",
+      value: control,
+      hint: `${v.control!.distance_from_target_km.toFixed(0)} km away, ${v.control!.worldcover_tree_pct.toFixed(0)}% forest`,
+      dim: true,
+    });
+  }
+  if (corrected !== null) {
+    rows.push({
+      label: "Corrected (target − control)",
+      value: corrected,
+      hint: "the defensible figure",
+    });
+  }
 
   return (
     <div className="mt-3 border-t border-[var(--line-soft)] pt-2.5">
       <div className="mb-2 flex items-baseline justify-between">
         <span className="kicker">Sentinel-2 corroboration</span>
-        <span
-          className="mono text-[11px] font-bold"
-          style={{ color: drop < 0 ? "var(--danger)" : "var(--accent)" }}
-        >
-          NDVI {drop > 0 ? "+" : ""}
-          {drop.toFixed(4)}
+        <span className="text-[10px] text-[var(--dim)]">
+          {day(v.before.scene_date)} → {day(v.after.scene_date)}
         </span>
       </div>
 
@@ -371,8 +434,6 @@ function NdviPanel({ v }: { v: Verification }) {
           { label: "After", src: "/imagery/after.png", d: v.after },
         ].map((c) => (
           <figure key={c.label} className="min-w-0 flex-1">
-            {/* Plain <img>: these are small static chips, and next/image's
-                optimiser adds a server round-trip for no benefit here. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={c.src}
@@ -380,22 +441,95 @@ function NdviPanel({ v }: { v: Verification }) {
               className="aspect-square w-full rounded border border-[var(--line)] object-cover"
               loading="lazy"
             />
-            <figcaption className="mt-1 leading-tight">
-              <div className="text-[10px] font-semibold text-[var(--text)]">
-                {c.label} · {day(c.d.scene_date)}
-              </div>
-              <div className="mono text-[10px] text-[var(--dim)]">
-                NDVI {c.d.mean_ndvi.toFixed(3)} · {pct(c.d.cloud_cover_pct)}% cloud
-              </div>
+            <figcaption className="mono mt-1 text-[10px] text-[var(--dim)]">
+              {c.label} · NDVI {c.d.mean_ndvi.toFixed(3)}
             </figcaption>
           </figure>
         ))}
       </div>
 
+      <dl className="mt-2 space-y-1">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline gap-2">
+            <dt
+              className="flex-1 text-[10px] leading-tight"
+              style={{ color: r.dim ? "var(--dim)" : "var(--text)" }}
+            >
+              {r.label}
+              <span className="ml-1 text-[var(--dim)]">({r.hint})</span>
+            </dt>
+            <dd
+              className="mono shrink-0 text-[11px] font-bold"
+              style={{ color: r.dim ? "var(--muted)" : "var(--danger)" }}
+            >
+              {r.value > 0 ? "+" : ""}
+              {r.value.toFixed(4)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="mt-2 text-[10px] leading-snug text-[var(--dim)]">
+        {control !== null && corrected !== null ? (
+          <>
+            Most of the raw drop is seasonal: undisturbed forest {v.control!.distance_from_target_km.toFixed(0)} km
+            away moved {control.toFixed(4)} in the same two images. The corrected residual is{" "}
+            <b className="text-[var(--muted)]">{corrected.toFixed(4)}</b> — a modest and uncertain
+            decline, not proof of large-scale clearing.
+            {smoke > 0.05 && (
+              <>
+                {" "}
+                It is further confounded by ~{Math.round(smoke * 100)}% smoke-like pixels in the
+                after image, which the Sentinel cloud mask does not flag.
+              </>
+            )}
+          </>
+        ) : (
+          <>Vegetation index change between two Sentinel-2 scenes.</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * How much of this ranking is real, and how much is our weighting?
+ *
+ * The scoring weights are considered judgements, not measurements. Showing a
+ * rank to one decimal place without saying how stable it is overstates what we
+ * know. This reports the share of 400 perturbed weightings in which the target
+ * still made the top five, so a ranger can tell a robust call from an artefact
+ * of our assumptions.
+ */
+function RobustnessBar({
+  r,
+  colour,
+}: {
+  r: NonNullable<ScoredTarget["robustness"]>;
+  colour: string;
+}) {
+  const pct = Math.round(r.topNShare * 100);
+  const verdict =
+    pct >= 90 ? "robust" : pct >= 60 ? "moderately stable" : pct >= 25 ? "sensitive" : "fragile";
+
+  return (
+    <div className="mt-3 border-t border-[var(--line-soft)] pt-2.5">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="kicker">Rank stability</span>
+        <span className="mono text-[11px] font-bold" style={{ color: colour }}>
+          {pct}% · {verdict}
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-[var(--line-soft)]">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, background: colour, opacity: 0.85 }}
+        />
+      </div>
       <p className="mt-1.5 text-[10px] leading-snug text-[var(--dim)]">
-        Mean vegetation index fell {Math.abs(drop).toFixed(4)} between the two
-        scenes — canopy loss, not just a heat signature. Cloud figures are
-        scene-level; localised haze or smoke can still appear in the chip.
+        Held a top-5 place in {pct}% of 400 randomised weightings; rank ranged {r.bestRank}–
+        {r.worstRank}. The weights are judgements, not measurements — this is how much the
+        ranking depends on them.
       </p>
     </div>
   );

@@ -128,9 +128,6 @@ function toDms(value: number, axis: "lat" | "lon"): string {
   return `${d}° ${String(m).padStart(2, "0")}' ${s.toFixed(1).padStart(4, "0")}" ${hemi}`;
 }
 
-const fmtRoad = (m: number | null) =>
-  m === null ? "no mapped access" : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
-
 export interface PatrolOrderProps {
   orderId: string;
   issuedAt: Date;
@@ -148,6 +145,7 @@ export function PatrolOrder(props: PatrolOrderProps) {
 
   const issued = issuedAt.toISOString().replace("T", " ").slice(0, 16) + " UTC";
   const totalHours = targets.reduce((s, t) => s + t.driveTimeHours, 0);
+  const unroutable = targets.filter((t) => !t.routed).length;
 
   return (
     <Document
@@ -191,7 +189,9 @@ export function PatrolOrder(props: PatrolOrderProps) {
             {targets.length}
             {" highest-priority events are tasked below. Estimated total transit: "}
             <Text style={{ fontFamily: "Helvetica-Bold" }}>{totalHours.toFixed(1)} h</Text>
-            {"."}
+            {unroutable > 0
+              ? `. ${unroutable} of these has no vehicle route and requires air or river access.`
+              : "."}
           </Text>
         </View>
 
@@ -202,6 +202,9 @@ export function PatrolOrder(props: PatrolOrderProps) {
             <View style={styles.taskHead}>
               <Text style={styles.rank}>
                 {i + 1}. {t.protectedArea ?? "Unclassified tenure"}
+                {t.treeCoverPct !== null
+                  ? `  ·  ${Math.round(t.treeCoverPct)}% forest baseline`
+                  : ""}
               </Text>
               <Text style={styles.scorePill}>ACTIONABILITY {t.score.toFixed(1)}/100</Text>
             </View>
@@ -220,9 +223,13 @@ export function PatrolOrder(props: PatrolOrderProps) {
                 </Text>
               </View>
               <View style={styles.coordCell}>
-                <Text style={styles.coordLabel}>ACCESS / TRANSIT</Text>
+                <Text style={styles.coordLabel}>
+                  {t.routed ? "ROAD DISTANCE / TRANSIT" : "ACCESS (NO ROAD ROUTE)"}
+                </Text>
                 <Text style={styles.coordValue}>
-                  {fmtRoad(t.distanceToRoadM)} · {t.driveTimeHours.toFixed(1)} h
+                  {t.routed && t.routeKm !== null
+                    ? `${t.routeKm.toFixed(0)} km · ${t.driveTimeHours.toFixed(1)} h`
+                    : `${t.distanceFromPostKm.toFixed(0)} km direct · air/river`}
                 </Text>
               </View>
             </View>
@@ -249,7 +256,8 @@ export function PatrolOrder(props: PatrolOrderProps) {
           <Text style={{ marginTop: 2 }}>
             Decision-support only. Satellite thermal detections indicate active burning, not
             proof of illegality; tenure and permit status must be verified before enforcement
-            action.
+            action. Distances are routed over the OpenStreetMap road network; forest baseline
+            is ESA WorldCover 2021.
           </Text>
         </View>
       </Page>

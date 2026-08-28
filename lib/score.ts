@@ -1,4 +1,5 @@
 import { haversineM, distanceToNearestRoadM, pointInRings } from "./geo";
+import type { RouteResult } from "./route";
 import type {
   Cluster,
   ProtectedArea,
@@ -27,15 +28,33 @@ import type {
  */
 
 const WEIGHTS: Record<keyof ScoreBreakdown, number> = {
-  extent: 0.28, // how much forest is actually coming down
-  protection: 0.22, // is this land legally protected
-  recency: 0.2, // can we still catch them on site
-  access: 0.15, // can a vehicle physically get there
-  confidence: 0.1, // how much do we trust the detection
-  proximity: 0.05, // fuel and hours
+  extent: 0.24, // how much forest is actually coming down
+  forest: 0.2, // was this forest to begin with
+  protection: 0.18, // is this land legally protected
+  recency: 0.17, // can we still catch them on site
+  access: 0.12, // can a vehicle physically get there
+  confidence: 0.06, // how much do we trust the detection
+  proximity: 0.03, // fuel and hours
 };
 
 const CONFIDENCE_VALUE = { low: 0.4, nominal: 0.75, high: 1.0 } as const;
+
+/**
+ * Baseline tree cover below which a detection is very probably not
+ * deforestation at all.
+ *
+ * FIRMS reports heat, not forest loss. During the burning season most fires in
+ * this landscape are on land that was cleared years ago — pasture maintenance
+ * and crop residue, which are routine and usually legal. Without this factor
+ * the tool ranks farm burns as urgent deforestation and looks entirely
+ * convincing while doing it.
+ */
+function forestFactor(treeCoverPct: number | null): number {
+  // Unknown is not the same as "not forest". Sit near the middle rather than
+  // penalising a target for a gap in our own baseline data.
+  if (treeCoverPct === null) return 0.6;
+  return clamp01(Math.max(0.05, treeCoverPct / 100));
+}
 
 /** Cluster size at which extent saturates. Beyond ~30 detections in 24h the
  *  event is unambiguously large and further detections do not change the
@@ -124,6 +143,25 @@ function buildRationale(
       `${Math.round(t.frpSum)} MW total radiative power.`
   );
 
+  if (t.treeCoverPct !== null) {
+    if (t.treeCoverPct >= 60) {
+      out.push(
+        `${Math.round(t.treeCoverPct)}% tree cover at baseline — this was closed forest, ` +
+          `so the burn is consistent with clearing rather than pasture management.`
+      );
+    } else if (t.treeCoverPct >= 25) {
+      out.push(
+        `Only ${Math.round(t.treeCoverPct)}% tree cover at baseline — partially cleared ` +
+          `already; confirm this is not routine agricultural burning.`
+      );
+    } else {
+      out.push(
+        `${Math.round(t.treeCoverPct)}% tree cover at baseline — this land was already ` +
+          `cleared, so the fire is probably agricultural and not deforestation.`
+      );
+    }
+  }
+
   if (area) {
     out.push(`Falls inside ${area.name} — clearing here is prima facie illegal.`);
   } else {
@@ -146,10 +184,20 @@ function buildRationale(
     );
   }
 
-  out.push(
-    `${t.distanceFromPostKm.toFixed(0)} km from the ranger post; ` +
-      `est. ${t.driveTimeHours.toFixed(1)} h one way.`
-  );
+  if (t.routed && t.routeKm !== null) {
+    const detour = t.detourRatio
+      ? ` (${t.detourRatio.toFixed(1)}× the straight-line distance)`
+      : "";
+    out.push(
+      `${t.routeKm.toFixed(0)} km by road from the ranger post${detour}; ` +
+        `est. ${t.driveTimeHours.toFixed(1)} h one way.`
+    );
+  } else {
+    out.push(
+      `No road route found from the ranger post — ${t.distanceFromPostKm.toFixed(0)} km ` +
+        `in a straight line. Treat as air or river access.`
+    );
+  }
 
   return out;
 }
@@ -160,6 +208,10 @@ export function scoreCluster(
     post: RangerPost;
     roads: RoadSegment[];
     protectedAreas: ProtectedArea[];
+    /** Road-network route from the post, when one could be computed. */
+    route?: RouteResult | null;
+    /** Baseline tree cover at the cluster centroid, 0-100. */
+    treeCoverPct?: number | null;
     now?: Date;
   }
 ): ScoredTarget {
@@ -170,7 +222,11 @@ export function scoreCluster(
     haversineM(cluster.lat, cluster.lon, ctx.post.lat, ctx.post.lon) / 1000;
   const area = findProtectedArea(cluster.lat, cluster.lon, ctx.protectedAreas);
 
+  const treeCoverPct = ctx.treeCoverPct ?? null;
+  const route = ctx.route ?? null;
+
   const breakdown: ScoreBreakdown = {
+    forest: forestFactor(treeCoverPct),
     confidence: CONFIDENCE_VALUE[cluster.maxConfidence] ?? 0.5,
     extent: extentFactor(cluster.count, cluster.frpSum),
     recency: recencyFactor(cluster.lastSeen, now),
@@ -193,20 +249,40 @@ export function scoreCluster(
     breakdown,
     distanceToRoadM: Number.isFinite(distanceToRoadM) ? distanceToRoadM : null,
     distanceFromPostKm,
-    driveTimeHours: estimateDriveTimeHours(distanceFromPostKm, distanceToRoadM),
+    routeKm: route ? route.roadMetres / 1000 : null,
+    detourRatio: route ? route.detourRatio : null,
+    routed: route !== null,
+    treeCoverPct,
+    // Prefer the routed time. The straight-line estimate remains only as a
+    // fallback, and is flagged as such by `routed: false`.
+    driveTimeHours: route
+      ? route.driveHours + route.offRoadMetres / 1000 / 3.5
+      : estimateDriveTimeHours(distanceFromPostKm, distanceToRoadM),
     protectedArea: area?.name ?? null,
   };
 
   return { ...partial, rationale: buildRationale(partial, area) };
 }
 
-/** Score every cluster and return the ranked patrol queue. */
+type ScoreContext = Parameters<typeof scoreCluster>[1];
+
+/**
+ * Score every cluster and return the ranked patrol queue.
+ *
+ * `perCluster` supplies the inputs that have to be computed per target rather
+ * than shared — the road route and the forest baseline. It is a callback so the
+ * caller owns the expensive work (graph search, grid lookup) and this module
+ * stays free of I/O.
+ */
 export function rankTargets(
   clusters: Cluster[],
-  ctx: Parameters<typeof scoreCluster>[1]
+  ctx: Omit<ScoreContext, "route" | "treeCoverPct"> & {
+    perCluster?: (c: Cluster) => Pick<ScoreContext, "route" | "treeCoverPct">;
+  }
 ): ScoredTarget[] {
+  const { perCluster, ...shared } = ctx;
   return clusters
-    .map((c) => scoreCluster(c, ctx))
+    .map((c) => scoreCluster(c, { ...shared, ...(perCluster?.(c) ?? {}) }))
     .sort((a, b) => b.score - a.score);
 }
 

@@ -15,9 +15,41 @@
     "item_id": "S2A_MSIL2A_20260827T135131_R024_T21LZJ_20260827T233711",
     "scene_date": "2026-08-27T13:51:31.024000Z",
     "cloud_cover_pct": 0.001546,
-    "mean_ndvi": 0.40815338492393494
+    "mean_ndvi": 0.4082671105861664
   },
-  "ndvi_delta_after_minus_before": -0.0668603777885437,
-  "source": "Microsoft Planetary Computer STAC API, collection sentinel-2-l2a, assets visual/B04/B08",
-  "generated_at_utc": "2026-08-28T09:41:49.827130+00:00"
+  "ndvi_delta_after_minus_before": -0.06674665212631226,
+  "masked_fraction_before": 0.0,
+  "masked_fraction_after": 0.0005656108597285048,
+  "smoke_like_pixel_fraction_before": 8.080155138978668e-05,
+  "smoke_like_pixel_fraction_after": 0.19531755009696186,
+  "smoke_caveat": "The AFTER chip's SCL band flags almost none of it as cloud (see masked_fraction_after), but a bright/low-saturation pixel heuristic on the true-colour chip (smoke_like_pixel_fraction_after) finds 20% of the chip looks like smoke or haze. Sen2Cor's SCL classifier is built to detect cloud, not smoke, and visibly misses the plumes visible in after.png. Part of the AFTER mean_ndvi drop may therefore be smoke attenuation rather than canopy loss; this could not be corrected for with the SCL band alone. The control chip shows no such contamination in either scene (smoke_like_pixel_fraction 0% / 0%).",
+  "control": {
+    "lat": -10.9,
+    "lon": -54.15,
+    "mean_ndvi_before": 0.5442175269126892,
+    "mean_ndvi_after": 0.4964698851108551,
+    "delta": -0.047747641801834106,
+    "masked_fraction_before": 0.0,
+    "masked_fraction_after": 0.0,
+    "smoke_like_pixel_fraction_before": 0.0002637826431020839,
+    "smoke_like_pixel_fraction_after": 0.00010145486273157072,
+    "worldcover_tree_pct": 99.99652777777777,
+    "worldcover_dominant_class": "Tree cover",
+    "firms_detections_within_5_5km": 0,
+    "distance_from_target_km": 19.798547827837417,
+    "rationale": "Control at (-10.9, -54.15) is ~19.8 km SW of the target, read from the SAME two Sentinel-2 items as the target (before=S2C_MSIL2A_20250929T134721_R024_T21LZJ_20250929T184014, after=S2A_MSIL2A_20260827T135131_R024_T21LZJ_20260827T233711) so it shares season, sun angle, sensor and atmosphere. Selected before inspecting its NDVI: zero NASA FIRMS thermal detections within ~5.5km in the loaded alerts.json (394 detections total), and ESA WorldCover 2021 dominant class 'Tree cover' (100.0% tree-cover pixels in a ~1.1km box). Its own NDVI (0.544 before, 0.496 after) is reported as a post-hoc sanity check, not as the selection criterion: it is below the >0.7 closed-canopy rule of thumb, consistent with target NDVI in this same pair of scenes (0.475/0.408) also sitting well under 0.7 \u2014 this Amazon-Cerrado transition forest reads lower than humid rainforest on Sentinel-2 NDVI generally, not a sign the control is non-forest."
+  },
+  "corrected_delta": -0.01899901032447815,
+  "same_mgrs_tile_before_after": true,
+  "scl_excluded_classes": [
+    0,
+    1,
+    3,
+    8,
+    9,
+    10,
+    11
+  ],
+  "source": "Microsoft Planetary Computer STAC API, collection sentinel-2-l2a, assets visual/B04/B08/SCL; control read from the identical before/after items as the target; ESA WorldCover 10m 2021 for land-cover cross-check; NASA FIRMS detections from data/alerts.json for control proximity check.",
+  "generated_at_utc": "2026-08-28T11:40:23.039533+00:00"
 }

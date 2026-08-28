@@ -22,6 +22,10 @@ interface Props {
    *  auto-selection — otherwise the opening frame is a zoom-10 rectangle of
    *  unbroken rainforest, which on a dark basemap is just black. */
   focusId: string | null;
+  /** Area of operations, supplied by the API. Previously a second hardcoded
+   *  copy of the AOI lived here and had to be kept in step with lib/config.ts
+   *  by hand — which is exactly the kind of duplication that silently rots. */
+  bounds: { south: number; west: number; north: number; east: number };
   onSelect: (id: string) => void;
 }
 
@@ -56,11 +60,6 @@ const STYLE = {
   ],
 };
 
-/** Mirrors lib/config.ts AOI. Duplicated as a literal rather than imported so
- *  this client component does not pull the server config module into the
- *  browser bundle. */
-const AOI_BOUNDS = { south: -12.6, west: -54.6, north: -10.3, east: -53.0 };
-
 const colourFor = (score: number) =>
   score >= 60 ? "#ef4444" : score >= 50 ? "#f97316" : score >= 40 ? "#eab308" : "#84cc16";
 
@@ -70,6 +69,7 @@ export default function MapView({
   protectedAreas,
   selectedId,
   focusId,
+  bounds,
   onSelect,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
@@ -78,11 +78,23 @@ export default function MapView({
   const [ready, setReady] = useState(false);
 
   // Keep the latest handler in a ref so marker listeners never close over a
-  // stale callback when the parent re-renders.
+  // stale callback when the parent re-renders. Assigned in an effect rather
+  // than during render — mutating a ref while rendering is not safe under
+  // concurrent rendering, and React's lint rules reject it.
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   const hasFocused = useRef(false);
+
+  // The map is constructed once, but the resize handler re-fits to the AOI on
+  // every container change. Reading the bounds through a ref keeps the init
+  // effect genuinely one-shot while still using the current area.
+  const boundsRef = useRef(bounds);
+  useEffect(() => {
+    boundsRef.current = bounds;
+  }, [bounds]);
 
   // ---------------------------------------------------------------- init once
   useEffect(() => {
@@ -95,9 +107,11 @@ export default function MapView({
       // constructor matters: calling fitBounds() straight after construction
       // measures a container that has not been laid out yet and silently
       // produces the wrong frame.
+      // Initial frame only; subsequent AOI changes are handled by the resize
+      // observer below via boundsRef.
       bounds: [
-        [AOI_BOUNDS.west, AOI_BOUNDS.south],
-        [AOI_BOUNDS.east, AOI_BOUNDS.north],
+        [boundsRef.current.west, boundsRef.current.south],
+        [boundsRef.current.east, boundsRef.current.north],
       ],
       fitBoundsOptions: { padding: 56 },
       attributionControl: {
@@ -188,10 +202,11 @@ export default function MapView({
       // Once the user has picked a target, a resize must not yank the camera
       // back to the overview.
       if (hasFocused.current) return;
+      const b = boundsRef.current;
       m.fitBounds(
         [
-          [AOI_BOUNDS.west, AOI_BOUNDS.south],
-          [AOI_BOUNDS.east, AOI_BOUNDS.north],
+          [b.west, b.south],
+          [b.east, b.north],
         ],
         { padding: 56, animate: false }
       );
@@ -307,13 +322,81 @@ export default function MapView({
     });
   }, [targets, post, selectedId]);
 
+  // -------------------------------------------------------------- route layer
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const src = m.getSource("route");
+    if (!src || !("setData" in src)) return;
+    const set = (features: unknown[]) =>
+      (src as { setData: (d: unknown) => void }).setData({
+        type: "FeatureCollection",
+        features,
+      });
+
+    const t = focusId ? targets.find((x) => x.id === focusId) : null;
+    if (!t) {
+      set([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/route-to?lat=${t.lat}&lon=${t.lon}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        if (!d?.routed || !d.geometry?.length) {
+          set([]);
+          return;
+        }
+        const coords = d.geometry as [number, number][];
+        set([
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: coords },
+          },
+        ]);
+
+        // Frame the whole journey. Zooming to the target alone leaves a 200 km
+        // route almost entirely off-screen, which hides the single most useful
+        // thing the routing tells a ranger: how far this actually is.
+        let minLon = coords[0][0], maxLon = coords[0][0];
+        let minLat = coords[0][1], maxLat = coords[0][1];
+        for (const [lo, la] of coords) {
+          if (lo < minLon) minLon = lo;
+          if (lo > maxLon) maxLon = lo;
+          if (la < minLat) minLat = la;
+          if (la > maxLat) maxLat = la;
+        }
+        m.fitBounds(
+          [
+            [minLon, minLat],
+            [maxLon, maxLat],
+          ],
+          { padding: 70, duration: 900 }
+        );
+      })
+      .catch(() => {
+        if (!cancelled) set([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [focusId, targets, ready]);
+
   // ------------------------------------------------------------- fly on focus
   useEffect(() => {
     const m = map.current;
     if (!m || !focusId) return;
     hasFocused.current = true;
     const t = targets.find((x) => x.id === focusId);
-    if (t) m.flyTo({ center: [t.lon, t.lat], zoom: 10, duration: 900 });
+    if (!t) return;
+    // A routable target is framed by the route effect above once the polyline
+    // arrives; only fly directly for targets with no road route.
+    if (t.routed) return;
+    m.flyTo({ center: [t.lon, t.lat], zoom: 9.5, duration: 900 });
   }, [focusId, targets]);
 
   // Inline styles, not Tailwind utilities. maplibre-gl.css declares
