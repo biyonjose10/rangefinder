@@ -30,6 +30,10 @@ export interface AoiMeta {
   post: RangerPost;
   /** True when the folder ships Sentinel-2 before/after imagery. */
   hasImagery?: boolean;
+  /** Preferred landing area. Without this the default fell out of alphabetical
+   *  order, which is an accident rather than a decision — and it happened to
+   *  pick the largest, slowest area as the first thing anyone sees. */
+  default?: boolean;
   generatedAt?: string;
 }
 
@@ -72,7 +76,7 @@ export async function listAois(): Promise<AoiMeta[]> {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** The requested area, the first available one, or null when none exist. */
+/** The requested area, else the one marked default, else the first. */
 export async function resolveAoi(slug?: string | null): Promise<AoiMeta | null> {
   const all = await listAois();
   if (!all.length) return null;
@@ -80,7 +84,7 @@ export async function resolveAoi(slug?: string | null): Promise<AoiMeta | null> 
     const hit = all.find((a) => a.slug === slug);
     if (hit) return hit;
   }
-  return all[0];
+  return all.find((a) => a.default) ?? all[0];
 }
 
 export interface AoiData {

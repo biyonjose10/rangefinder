@@ -15,5 +15,6 @@
     "lon": -54.9919857
   },
   "hasImagery": true,
-  "generatedAt": "2026-08-28T15:49:13.482327+00:00"
+  "generatedAt": "2026-08-28T15:49:13.482327+00:00",
+  "default": true
 }
