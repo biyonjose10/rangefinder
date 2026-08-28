@@ -109,12 +109,25 @@ function proximityFactor(distanceFromPostKm: number): number {
  * that the big fires are *outside* the park.
  */
 function findProtectedArea(
-  lat: number,
-  lon: number,
+  cluster: Cluster,
   areas: ProtectedArea[]
 ): ProtectedArea | null {
+  if (!areas.length) return null;
+
+  // Test the centroid first, then every detection in the event.
+  //
+  // Centroid-only was wrong in a way that mattered: a clearing event straddling
+  // a park boundary has its centroid outside whenever most of the burn is
+  // outside, so fires genuinely inside protected land were reported as
+  // unclassified tenure. On Sebangau that hid every in-park detection. If any
+  // part of the event is on protected ground, the ranger needs to know.
   for (const area of areas) {
-    if (pointInRings(lon, lat, area.rings)) return area;
+    if (pointInRings(cluster.lon, cluster.lat, area.rings)) return area;
+  }
+  for (const area of areas) {
+    for (const a of cluster.alerts) {
+      if (pointInRings(a.lon, a.lat, area.rings)) return area;
+    }
   }
   return null;
 }
@@ -220,7 +233,7 @@ export function scoreCluster(
   const distanceToRoadM = distanceToNearestRoadM(cluster.lat, cluster.lon, ctx.roads);
   const distanceFromPostKm =
     haversineM(cluster.lat, cluster.lon, ctx.post.lat, ctx.post.lon) / 1000;
-  const area = findProtectedArea(cluster.lat, cluster.lon, ctx.protectedAreas);
+  const area = findProtectedArea(cluster, ctx.protectedAreas);
 
   const treeCoverPct = ctx.treeCoverPct ?? null;
   const route = ctx.route ?? null;
@@ -288,7 +301,7 @@ export function rankTargets(
     routeTopN?: number;
   }
 ): ScoredTarget[] {
-  const { context, route, routeTopN = 20, ...shared } = ctx;
+  const { context, route, routeTopN = 12, ...shared } = ctx;
 
   const cheap = clusters.map((c) => ({
     cluster: c,

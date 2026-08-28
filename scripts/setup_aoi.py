@@ -42,7 +42,13 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-OVERPASS = "https://overpass-api.de/api/interpreter"
+# The main instance regularly answers "the server is probably too busy" with an
+# HTML error page. Try mirrors in turn rather than failing the whole build.
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
 
 # Mirrors FIRMS_SOURCES in lib/sources/firms.ts. Keep the two in step.
 _CSV = ("https://firms.modaps.eosdis.nasa.gov/data/active_fire/"
@@ -94,10 +100,11 @@ def overpass(query: str, timeout: int = 600, attempts: int = 3) -> dict:
     payload actually starts with '{' before trusting it.
     """
     body = urllib.parse.urlencode({"data": query}).encode()
-    for attempt in range(1, attempts + 1):
+    endpoints = OVERPASS_ENDPOINTS * attempts
+    for attempt, endpoint in enumerate(endpoints, 1):
         try:
             req = urllib.request.Request(
-                OVERPASS,
+                endpoint,
                 data=body,
                 headers={
                     "User-Agent": UA,
@@ -112,10 +119,11 @@ def overpass(query: str, timeout: int = 600, attempts: int = 3) -> dict:
             return json.loads(raw)
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, TimeoutError) as e:
             code = getattr(e, "code", None)
-            if attempt == attempts:
+            if attempt == len(endpoints):
                 raise
-            wait = 20 if code in (429, 504) else 8
-            print(f"    Overpass attempt {attempt} failed ({e}); retrying in {wait}s")
+            wait = 20 if code in (429, 504) else 5
+            host = urllib.parse.urlparse(endpoint).netloc
+            print(f"    {host} failed ({str(e)[:80]}); trying next mirror in {wait}s")
             time.sleep(wait)
     raise RuntimeError("unreachable")
 
@@ -290,18 +298,29 @@ def fetch_roads(pad, dry):
 
 
 def fetch_protected(bbox, dry):
-    q = (
-        f"[out:json][timeout:300];("
-        f'relation["boundary"="protected_area"]({bbox["south"]},{bbox["west"]},{bbox["north"]},{bbox["east"]});'
-        f'relation["boundary"="aboriginal_lands"]({bbox["south"]},{bbox["west"]},{bbox["north"]},{bbox["east"]});'
-        f");out tags;"
+    # Conservation areas are tagged inconsistently in OSM and may be either a
+    # relation or a single closed way. An earlier version asked only for
+    # relations tagged boundary=protected_area, which silently missed Taman
+    # Nasional Sebangau - a 5,300 km2 national park mapped as a *way* tagged
+    # boundary=national_park. The area then reported no protected land at all,
+    # which for an enforcement tool is the most damaging way to be wrong.
+    b = f'{bbox["south"]},{bbox["west"]},{bbox["north"]},{bbox["east"]}'
+    selectors = [
+        '["boundary"="protected_area"]',
+        '["boundary"="national_park"]',
+        '["boundary"="aboriginal_lands"]',
+        '["leisure"="nature_reserve"]',
+    ]
+    parts = "".join(
+        f"relation{sel}({b});way{sel}({b});" for sel in selectors
     )
+    q = f"[out:json][timeout:300];({parts});out tags;"
     print("  [3/6] OpenStreetMap protected areas")
     print(f"    POST {OVERPASS}")
     if dry:
         return []
     found = overpass(q).get("elements", [])
-    print(f"    {len(found)} candidate relations")
+    print(f"    {len(found)} candidate features (relations and ways)")
 
     areas = []
     for rel in found:
@@ -310,15 +329,28 @@ def fetch_protected(bbox, dry):
         if not name:
             continue
         time.sleep(2)  # be polite between geometry fetches
+        kind = rel["type"]  # "relation" or "way"
         try:
-            g = overpass(f"[out:json][timeout:300];relation({rel['id']});out geom;")
+            g = overpass(f"[out:json][timeout:300];{kind}({rel['id']});out geom;")
         except Exception as e:
             print(f"    ! geometry fetch failed for {name}: {e}")
             continue
         els = g.get("elements") or []
         if not els:
             continue
-        rings = stitch_rings(els[0].get("members") or [])
+
+        if kind == "way":
+            # A closed way is already a ring; nothing to stitch.
+            geom = els[0].get("geometry") or []
+            pts = [(p["lon"], p["lat"]) for p in geom]
+            if len(pts) >= 4 and pts[0] == pts[-1]:
+                rings = [pts]
+            elif len(pts) >= 4:
+                rings = [pts + [pts[0]]]  # close it explicitly
+            else:
+                rings = []
+        else:
+            rings = stitch_rings(els[0].get("members") or [])
         if not rings:
             print(f"    ! {name}: rings would not close, skipped")
             continue

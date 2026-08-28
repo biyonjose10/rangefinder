@@ -122,6 +122,8 @@ class MinHeap {
 export class RoadGraph {
   private coords: [number, number][] = [];
   private adj: Edge[][] = [];
+  /** Fastest speed actually present, for the A* heuristic. */
+  private maxKmh = 1;
   private index = new Map<string, NodeId>();
   /** Coarse spatial bucket (0.05°) so nearest-node lookup is not O(n). */
   private buckets = new Map<string, NodeId[]>();
@@ -129,6 +131,7 @@ export class RoadGraph {
   constructor(segments: RoadSegment[]) {
     for (const seg of segments) {
       const speed = SPEED_KMH[seg.highway] ?? DEFAULT_SPEED_KMH;
+      if (speed > this.maxKmh) this.maxKmh = speed;
       let prev: NodeId | null = null;
 
       for (const [lon, lat] of seg.coords) {
@@ -234,7 +237,11 @@ export class RoadGraph {
     const b = this.nearest(to.lat, to.lon);
     if (!a || !b) return null;
 
-    const MAX_KMH = 90;
+    // Use the fastest speed actually in this network rather than a fixed 90.
+    // The heuristic stays admissible either way, but assuming a motorway in a
+    // network whose quickest road is a 55 km/h secondary makes it far too
+    // optimistic, so A* explores a much larger frontier than it needs to.
+    const MAX_KMH = this.maxKmh;
     const h = (n: NodeId) =>
       haversineM(this.coords[n][1], this.coords[n][0], this.coords[b.id][1], this.coords[b.id][0]) /
       1000 /
