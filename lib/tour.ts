@@ -42,6 +42,15 @@ export interface TourLeg {
   toTargetId: string | null;
   km: number;
   hours: number;
+  /**
+   * The road polyline for this leg, in GeoJSON order.
+   *
+   * Carried here because the router already produced it while costing the leg.
+   * An earlier version discarded it and had the browser re-request every leg
+   * from /api/route-to, which meant the drawn loop depended on a fan of extra
+   * round trips that could partly fail and leave the map silently blank.
+   */
+  geometry: [number, number][];
 }
 
 export interface TourPlan {
@@ -146,17 +155,27 @@ export function planTour(
 
   // Pairwise legs are the expensive part, so memoise: an n-target tour asks for
   // the same pair repeatedly across permutations.
-  const cache = new Map<string, { km: number; hours: number }>();
+  const cache = new Map<string, { km: number; hours: number; geometry: [number, number][] }>();
   const leg = (a: number, b: number) => {
-    const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+    // Direction matters for the drawn line even though cost is symmetric, so
+    // the cache is keyed on the ordered pair and the reverse is mirrored.
+    const key = `${a}:${b}`;
     const hit = cache.get(key);
     if (hit) return hit;
+
+    const rev = cache.get(`${b}:${a}`);
+    if (rev) {
+      const flipped = { ...rev, geometry: [...rev.geometry].reverse() };
+      cache.set(key, flipped);
+      return flipped;
+    }
+
     const r = graph.route(at(a), at(b));
     // An unreachable pair must never look free, or the optimiser will happily
     // route through it.
     const val = r
-      ? { km: r.roadMetres / 1000, hours: r.driveHours }
-      : { km: Infinity, hours: Infinity };
+      ? { km: r.roadMetres / 1000, hours: r.driveHours, geometry: r.geometry }
+      : { km: Infinity, hours: Infinity, geometry: [] as [number, number][] };
     cache.set(key, val);
     return val;
   };
@@ -210,6 +229,7 @@ export function planTour(
       toTargetId: drivable[i].id,
       km: l.km,
       hours: l.hours,
+      geometry: l.geometry,
     });
     prev = i;
   }
@@ -219,6 +239,7 @@ export function planTour(
     toTargetId: null,
     km: back.km,
     hours: back.hours,
+    geometry: back.geometry,
   });
 
   const onSite = bestPlan.order.length * TOUR_ASSUMPTIONS.hoursOnSite;

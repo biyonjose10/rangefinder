@@ -14,7 +14,13 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 
 interface TourPlan {
   sequence: string[];
-  legs: { fromTargetId: string | null; toTargetId: string | null; km: number; hours: number }[];
+  legs: {
+    fromTargetId: string | null;
+    toTargetId: string | null;
+    km: number;
+    hours: number;
+    geometry: [number, number][];
+  }[];
   totalKm: number;
   drivingHours: number;
   totalHours: number;
@@ -235,33 +241,23 @@ export default function Home() {
                 const p = await fetch(
                   `/api/patrol-plan?aoi=${encodeURIComponent(shown.aoi.slug)}`
                 ).then((r) => (r.ok ? r.json() : null));
-                if (!p?.tour) return;
+                if (!p?.tour) {
+                  setError("Could not plan a patrol for this area.");
+                  return;
+                }
                 setTour(p.tour);
-
-                // Draw the loop by asking for each leg's road geometry.
-                const byId = new Map<string, { lat: number; lon: number }>(
-                  (p.targets ?? []).map((t: { id: string; lat: number; lon: number }) => [
-                    t.id,
-                    { lat: t.lat, lon: t.lon },
-                  ])
+                // The server already routed every leg while costing the loop,
+                // so the polylines arrive with the plan. An earlier version
+                // re-fetched each leg from the browser, which meant the drawn
+                // route depended on a fan of extra requests that could partly
+                // fail and leave the map blank with no indication why.
+                setTourGeometry(
+                  (p.tour.legs ?? [])
+                    .map((l: { geometry: [number, number][] }) => l.geometry)
+                    .filter((g: [number, number][]) => g && g.length > 1)
                 );
-                const legs = await Promise.all(
-                  (p.tour.legs ?? []).map(
-                    async (l: { fromTargetId: string | null; toTargetId: string | null }) => {
-                      const to = l.toTargetId ? byId.get(l.toTargetId) : p.post;
-                      if (!to) return null;
-                      const r = await fetch(
-                        `/api/route-to?aoi=${encodeURIComponent(shown.aoi.slug)}` +
-                          `&lat=${to.lat}&lon=${to.lon}` +
-                          (l.fromTargetId
-                            ? `&fromLat=${byId.get(l.fromTargetId)?.lat}&fromLon=${byId.get(l.fromTargetId)?.lon}`
-                            : "")
-                      ).then((x) => (x.ok ? x.json() : null));
-                      return r?.routed ? (r.geometry as [number, number][]) : null;
-                    }
-                  )
-                );
-                setTourGeometry(legs.filter(Boolean) as [number, number][][]);
+              } catch (e) {
+                setError(`Could not plan a patrol: ${String(e)}`);
               } finally {
                 setPlanning(false);
               }
