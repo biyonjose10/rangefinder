@@ -127,6 +127,18 @@ export default function Home() {
 
   const top = useMemo(() => shown?.targets.slice(0, 12) ?? [], [shown]);
 
+  // Selection can originate on the map, where clicking a marker expanded a row
+  // that might be anywhere in the scrolled list — so the sidebar appeared not
+  // to respond at all. The same fault as the pulse being pinned to rank 1:
+  // state reflected in one place and not the other.
+  useEffect(() => {
+    if (!selected) return;
+    const row = document.querySelector(`[data-target-id="${CSS.escape(selected)}"]`);
+    // `nearest` leaves an already-visible row where it is, so choosing from the
+    // list itself does not cause the panel to jump.
+    row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selected]);
+
   return (
     <main className="flex h-screen flex-col overflow-hidden">
       {/* ---------- header ---------- */}
@@ -345,6 +357,7 @@ function TargetRow({
     // target or read the justification behind it at all — the same class of
     // exclusion as the colour-only severity scale.
     <div
+      data-target-id={t.id}
       role="button"
       tabIndex={0}
       aria-expanded={open}
