@@ -35,6 +35,8 @@ interface Props {
   bounds: { south: number; west: number; north: number; east: number };
   /** Area slug, used to reach that area's road geometry and routing endpoint. */
   aoiSlug: string;
+  /** Ordered polyline of the planned day, or null when no plan is shown. */
+  tourGeometry: [number, number][][] | null;
   onSelect: (id: string) => void;
 }
 
@@ -77,6 +79,7 @@ export default function MapView({
   focusId,
   bounds,
   aoiSlug,
+  tourGeometry,
   onSelect,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
@@ -414,6 +417,45 @@ export default function MapView({
       cancelled = true;
     };
   }, [focusId, targets, ready, aoiSlug]);
+
+  // --------------------------------------------------------------- tour layer
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const src = m.getSource("tour");
+    if (!src || !("setData" in src)) return;
+
+    const features = (tourGeometry ?? []).map((coords) => ({
+      type: "Feature" as const,
+      properties: {},
+      geometry: { type: "LineString" as const, coordinates: coords },
+    }));
+    (src as { setData: (d: unknown) => void }).setData({
+      type: "FeatureCollection",
+      features,
+    });
+
+    if (!features.length) return;
+
+    // Frame the whole day, which is the point of showing it at all.
+    const all = (tourGeometry ?? []).flat();
+    if (!all.length) return;
+    let minLon = all[0][0], maxLon = all[0][0], minLat = all[0][1], maxLat = all[0][1];
+    for (const [lo, la] of all) {
+      if (lo < minLon) minLon = lo;
+      if (lo > maxLon) maxLon = lo;
+      if (la < minLat) minLat = la;
+      if (la > maxLat) maxLat = la;
+    }
+    hasFocused.current = true;
+    m.fitBounds(
+      [
+        [minLon, minLat],
+        [maxLon, maxLat],
+      ],
+      { padding: 70, duration: 900 }
+    );
+  }, [tourGeometry, ready]);
 
   // ------------------------------------------------------------- fly on focus
   useEffect(() => {

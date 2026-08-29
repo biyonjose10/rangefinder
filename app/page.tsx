@@ -12,6 +12,18 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   loading: () => <div className="absolute inset-0 grid place-items-center text-[var(--dim)] text-sm">Loading terrain…</div>,
 });
 
+interface TourPlan {
+  sequence: string[];
+  legs: { fromTargetId: string | null; toTargetId: string | null; km: number; hours: number }[];
+  totalKm: number;
+  drivingHours: number;
+  totalHours: number;
+  litres: number;
+  fitsWorkingDay: boolean;
+  excluded: { id: string; reason: string }[];
+  naiveRoundTripHours: number;
+}
+
 interface AoiOption {
   slug: string;
   label: string;
@@ -85,6 +97,11 @@ export default function Home() {
   // legibility, but the camera must not move until a human asks it to.
   const [focus, setFocus] = useState<string | null>(null);
   const [verif, setVerif] = useState<Verification | null>(null);
+  // The planned day. Fetched on demand: sequencing needs a road route between
+  // every pair of tasked targets, so it is far dearer than the queue itself.
+  const [tour, setTour] = useState<TourPlan | null>(null);
+  const [tourGeometry, setTourGeometry] = useState<[number, number][][] | null>(null);
+  const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -99,6 +116,8 @@ export default function Home() {
         setSelected(d.targets[0]?.id ?? null);
         setFocus(null);
         setError(null);
+        setTour(null);
+        setTourGeometry(null);
         if (!aoi) setAoi(d.aoi.slug);
       })
       .catch((e) => !cancelled && setError(String(e)));
@@ -202,6 +221,57 @@ export default function Home() {
             </>
           )}
 
+          <button
+            onClick={async () => {
+              if (!shown) return;
+              if (tour) {
+                // Toggling off clears the loop but leaves the queue untouched.
+                setTour(null);
+                setTourGeometry(null);
+                return;
+              }
+              setPlanning(true);
+              try {
+                const p = await fetch(
+                  `/api/patrol-plan?aoi=${encodeURIComponent(shown.aoi.slug)}`
+                ).then((r) => (r.ok ? r.json() : null));
+                if (!p?.tour) return;
+                setTour(p.tour);
+
+                // Draw the loop by asking for each leg's road geometry.
+                const byId = new Map<string, { lat: number; lon: number }>(
+                  (p.targets ?? []).map((t: { id: string; lat: number; lon: number }) => [
+                    t.id,
+                    { lat: t.lat, lon: t.lon },
+                  ])
+                );
+                const legs = await Promise.all(
+                  (p.tour.legs ?? []).map(
+                    async (l: { fromTargetId: string | null; toTargetId: string | null }) => {
+                      const to = l.toTargetId ? byId.get(l.toTargetId) : p.post;
+                      if (!to) return null;
+                      const r = await fetch(
+                        `/api/route-to?aoi=${encodeURIComponent(shown.aoi.slug)}` +
+                          `&lat=${to.lat}&lon=${to.lon}` +
+                          (l.fromTargetId
+                            ? `&fromLat=${byId.get(l.fromTargetId)?.lat}&fromLon=${byId.get(l.fromTargetId)?.lon}`
+                            : "")
+                      ).then((x) => (x.ok ? x.json() : null));
+                      return r?.routed ? (r.geometry as [number, number][]) : null;
+                    }
+                  )
+                );
+                setTourGeometry(legs.filter(Boolean) as [number, number][][]);
+              } finally {
+                setPlanning(false);
+              }
+            }}
+            disabled={!shown || planning}
+            className="rounded-md border border-[var(--line)] px-3 py-2 text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--panel-2)] disabled:opacity-50"
+          >
+            {planning ? "Planning…" : tour ? "Hide the day" : "Plan the day"}
+          </button>
+
           <a
             href={shown ? `/api/patrol-order?aoi=${shown.aoi.slug}` : "/api/patrol-order"}
             target="_blank"
@@ -226,6 +296,7 @@ export default function Home() {
               focusId={focus}
               bounds={shown.aoi}
               aoiSlug={shown.aoi.slug}
+              tourGeometry={tourGeometry}
               onSelect={(id) => {
                 setSelected(id);
                 setFocus(id);
@@ -240,6 +311,54 @@ export default function Home() {
             <h2 className="text-[13px] font-semibold">Patrol queue</h2>
             <span className="kicker">ranked by actionability</span>
           </div>
+
+          {tour && (
+            <div className="border-b border-[var(--line-soft)] bg-[var(--panel-2)] px-4 py-3">
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="kicker">Today&apos;s patrol</span>
+                <span
+                  className="mono text-[11px] font-bold"
+                  style={{ color: tour.fitsWorkingDay ? "var(--accent)" : "var(--danger)" }}
+                >
+                  {tour.totalHours.toFixed(1)} h · {tour.totalKm.toFixed(0)} km · {tour.litres} L
+                </span>
+              </div>
+
+              {tour.sequence.length > 0 ? (
+                <p className="text-[11px] leading-snug text-[var(--muted)]">
+                  One loop from <b className="text-[var(--text)]">{shown?.post.name}</b> and back,
+                  visiting{" "}
+                  <b className="text-[var(--text)]">
+                    {tour.sequence.length} target{tour.sequence.length === 1 ? "" : "s"}
+                  </b>{" "}
+                  in driving order — {tour.drivingHours.toFixed(1)} h driving plus time on site.
+                </p>
+              ) : (
+                <p className="text-[11px] leading-snug text-[var(--danger)]">
+                  No drivable loop fits a working day from this post.
+                </p>
+              )}
+
+              {/* The honest comparison: what the order used to claim. */}
+              <p className="mt-1.5 text-[10px] leading-snug text-[var(--dim)]">
+                Ranking these as separate return trips would have implied{" "}
+                {tour.naiveRoundTripHours.toFixed(1)} h — a figure no crew could drive, because
+                it counts the journey home and back out again between every target.
+              </p>
+
+              {tour.excluded.length > 0 && (
+                <ul className="mt-2 space-y-0.5 border-t border-[var(--line-soft)] pt-1.5">
+                  {tour.excluded.map((e) => (
+                    <li key={e.id} className="text-[10px] text-[var(--dim)]">
+                      Not tasked — {e.reason === "no road route"
+                        ? "no vehicle route; air or river access"
+                        : "does not fit the driving day; carry forward"}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {shown?.weatherNote && (
             <div

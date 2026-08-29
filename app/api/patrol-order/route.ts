@@ -21,7 +21,10 @@ export async function GET(request: Request) {
   // Runs the pipeline in-process. An earlier version fetched /api/targets over
   // HTTP, which paid for the entire pipeline twice and pushed the larger area
   // past the serverless duration limit — the PDF never returned at all.
-  const data = await buildTargets(aoi);
+  // Ask for the day to be sequenced across exactly the targets that will be
+  // tasked. The order is the one place the loop genuinely matters — it is what
+  // a crew plans their day around.
+  const data = await buildTargets(aoi, PATROL_ORDER_SIZE);
   if (!data) {
     return new Response("No areas of operation are configured.", { status: 503 });
   }
@@ -50,6 +53,7 @@ export async function GET(request: Request) {
       totalDetections: data.counts.detections,
       totalEvents: data.counts.events,
       live: data.live,
+      tour: data.tour,
     }) as React.ReactElement<import("@react-pdf/renderer").DocumentProps>
   );
 

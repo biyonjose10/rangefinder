@@ -9,6 +9,7 @@ import {
 
 import type { RangerPost, ScoredTarget } from "../types";
 import { severityLabel } from "../marker";
+import { TOUR_ASSUMPTIONS, type TourPlan } from "../tour";
 import { ATTRIBUTION } from "../config";
 
 /**
@@ -138,15 +139,25 @@ export interface PatrolOrderProps {
   totalDetections: number;
   totalEvents: number;
   live: boolean;
+  /** The sequenced day. When present, tasks are numbered in driving order. */
+  tour: TourPlan | null;
 }
 
 export function PatrolOrder(props: PatrolOrderProps) {
-  const { orderId, issuedAt, aoiLabel, post, targets, totalDetections, totalEvents, live } =
+  const { orderId, issuedAt, aoiLabel, post, targets, totalDetections, totalEvents, live, tour } =
     props;
 
   const issued = issuedAt.toISOString().replace("T", " ").slice(0, 16) + " UTC";
-  const totalHours = targets.reduce((s, t) => s + t.driveTimeHours, 0);
   const unroutable = targets.filter((t) => !t.routed).length;
+
+  // Tasks are listed in *driving* order when a route has been planned, because
+  // that is the order the day actually happens in. Rank is still printed
+  // against each task so the reason it was chosen stays visible.
+  const byId = new Map(targets.map((t) => [t.id, t]));
+  const rankOf = new Map(targets.map((t, i) => [t.id, i + 1]));
+  const sequenced = tour?.sequence.length
+    ? tour.sequence.map((id) => byId.get(id)).filter((t): t is ScoredTarget => !!t)
+    : targets;
 
   return (
     <Document
@@ -175,7 +186,7 @@ export function PatrolOrder(props: PatrolOrderProps) {
           </View>
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>TASKS</Text>
-            <Text style={styles.metaValue}>{targets.length}</Text>
+            <Text style={styles.metaValue}>{sequenced.length}</Text>
           </View>
         </View>
 
@@ -186,23 +197,44 @@ export function PatrolOrder(props: PatrolOrderProps) {
             </Text>
             {"  in the last 24 hours were resolved into "}
             <Text style={{ fontFamily: "Helvetica-Bold" }}>{totalEvents} distinct clearing events</Text>
-            {" and ranked by actionability. The "}
-            {targets.length}
-            {" highest-priority events are tasked below. Estimated total transit: "}
-            <Text style={{ fontFamily: "Helvetica-Bold" }}>{totalHours.toFixed(1)} h</Text>
+            {" and ranked by actionability."}
+            {tour && tour.sequence.length > 0 ? (
+              <Text>
+                {"  The "}
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>{tour.sequence.length}</Text>
+                {tour.sequence.length === 1
+                  ? " task below is the only one that fits a working day, driven from "
+                  : " tasks below are sequenced as a single loop from "}
+                {post.name}
+                {" and back: "}
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>
+                  {tour.totalKm.toFixed(0)} km, {tour.drivingHours.toFixed(1)} h driving,
+                  {" "}
+                  {tour.totalHours.toFixed(1)} h including time on site, about {tour.litres} L of
+                  diesel.
+                </Text>
+              </Text>
+            ) : (
+              <Text>{"  No drivable loop could be planned for these targets."}</Text>
+            )}
             {unroutable > 0
-              ? `. ${unroutable} of these has no vehicle route and requires air or river access.`
-              : "."}
+              ? ` ${unroutable} target${unroutable === 1 ? "" : "s"} cannot be reached by vehicle at all.`
+              : ""}
           </Text>
         </View>
 
-        <Text style={styles.sectionHead}>TASKED TARGETS — IN PRIORITY ORDER</Text>
+        <Text style={styles.sectionHead}>
+          {tour && tour.sequence.length > 0
+            ? "TASKED TARGETS — IN DRIVING ORDER"
+            : "TASKED TARGETS — IN PRIORITY ORDER"}
+        </Text>
 
-        {targets.map((t, i) => (
+        {sequenced.map((t, i) => (
           <View key={t.id} style={styles.task} wrap={false}>
             <View style={styles.taskHead}>
               <Text style={styles.rank}>
                 {i + 1}. {t.protectedArea ?? "Unclassified tenure"}
+                {tour && tour.sequence.length > 0 ? `  (priority #${rankOf.get(t.id)})` : ""}
                 {t.treeCoverPct !== null
                   ? `  ·  ${Math.round(t.treeCoverPct)}% forest baseline`
                   : ""}
@@ -253,6 +285,37 @@ export function PatrolOrder(props: PatrolOrderProps) {
             </View>
           </View>
         ))}
+
+        {tour && tour.excluded.length > 0 && (
+          <View wrap={false}>
+            <Text style={[styles.sectionHead, { marginTop: 6 }]}>
+              CONSIDERED BUT NOT TASKED
+            </Text>
+            {tour.excluded.map((e) => {
+              const t = byId.get(e.id);
+              return (
+                <View key={e.id} style={styles.bullet}>
+                  <Text style={styles.bulletDot}>—</Text>
+                  <Text style={styles.bulletText}>
+                    Priority #{rankOf.get(e.id) ?? "?"}
+                    {t ? ` at ${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}` : ""}
+                    {t?.protectedArea ? ` (${t.protectedArea})` : ""} —{" "}
+                    {e.reason === "no road route"
+                      ? "no vehicle route exists; requires air or river access."
+                      : "ranked for patrol but does not fit within the driving day; carry forward."}
+                  </Text>
+                </View>
+              );
+            })}
+            <Text style={[styles.checkbox, { marginTop: 5 }]}>
+              Planning assumptions: {TOUR_ASSUMPTIONS.maxDrivingHours} h driving day,{" "}
+              {TOUR_ASSUMPTIONS.hoursOnSite} h on site per target,{" "}
+              {TOUR_ASSUMPTIONS.litresPer100km} L/100 km on unsealed road. Travel times are
+              estimated from road class and do not account for river crossings, seasonal
+              closures or tracks absent from OpenStreetMap.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.footer} fixed>
           <Text>

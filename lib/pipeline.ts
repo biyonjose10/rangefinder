@@ -7,6 +7,7 @@ import { listAois, loadAoiData, loadCachedAlerts, resolveAoi, type AoiMeta } fro
 import { fetchLiveAlerts } from "./sources/firms";
 import { DEMO_MODE } from "./config";
 import { fetchAreaWeather, weatherNote, type AreaWeather } from "./sources/weather";
+import { planTour, type TourPlan } from "./tour";
 import type { Alert, RangerPost, ScoredTarget } from "./types";
 
 /**
@@ -55,6 +56,11 @@ export interface TargetsPayload {
   weather: AreaWeather | null;
   /** Plain-language caveat about observability or trafficability. */
   weatherNote: string | null;
+  /** The sequenced patrol, present only when explicitly requested. Computing it
+   *  needs a road route between every pair of tasked targets, which is far more
+   *  expensive than the queue itself, so it is never computed for a plain list
+   *  request. */
+  tour: TourPlan | null;
 }
 
 async function loadAlerts(
@@ -84,8 +90,19 @@ async function loadAlerts(
   }
 }
 
-/** Returns null when no area is configured at all. */
-export async function buildTargets(slug?: string | null): Promise<TargetsPayload | null> {
+/**
+ * Returns null when no area is configured at all.
+ *
+ * `withTour` asks for the day to be sequenced across that many top targets.
+ * Deliberately opt-in: a tour needs a road route between every pair of targets,
+ * so five targets means fifteen A* traversals against five, and twelve would
+ * mean seventy-eight. The interface's queue must stay fast, so only the patrol
+ * order and the plan endpoint pay that cost.
+ */
+export async function buildTargets(
+  slug?: string | null,
+  withTour?: number
+): Promise<TargetsPayload | null> {
   const started = Date.now();
 
   const meta = await resolveAoi(slug);
@@ -121,6 +138,11 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
   const robustness = analyseRobustness(targets, 5);
   for (const t of targets) t.robustness = robustness.get(t.id);
 
+  const tour =
+    withTour && withTour > 0
+      ? planTour(meta.post, targets.slice(0, withTour), graph)
+      : null;
+
   return {
     aoi: { ...meta.bbox, label: meta.label, subtitle: meta.subtitle, slug: meta.slug },
     // Populated from what is actually on disk, so a newly generated area
@@ -148,5 +170,6 @@ export async function buildTargets(slug?: string | null): Promise<TargetsPayload
     targets,
     weather,
     weatherNote: weather ? weatherNote(weather, alerts.length) : null,
+    tour,
   };
 }

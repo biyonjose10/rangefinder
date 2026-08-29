@@ -21,6 +21,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "lat and lon are required" }, { status: 400 });
   }
 
+  // Optional origin. Without it the route starts at the ranger post, which is
+  // what a single target needs; a leg of a planned day starts at the previous
+  // target instead.
+  const fromLat = Number(params.get("fromLat"));
+  const fromLon = Number(params.get("fromLon"));
+  const hasOrigin = Number.isFinite(fromLat) && Number.isFinite(fromLon);
+
   const meta = await resolveAoi(params.get("aoi"));
   if (!meta) return NextResponse.json({ routed: false, reason: "no area configured" });
 
@@ -29,14 +36,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ routed: false, reason: "no road network for this area" });
   }
 
-  const result = getRoadGraph(meta.slug, roads).route(meta.post, { lat, lon });
+  const origin = hasOrigin ? { lat: fromLat, lon: fromLon } : meta.post;
+  const result = getRoadGraph(meta.slug, roads).route(origin, { lat, lon });
 
   if (!result) {
     // Not an error. A target with no vehicle route is a real operational
     // finding — it means air or river access — and the UI says so.
     return NextResponse.json({
       routed: false,
-      reason: "no road route exists between the ranger post and this target",
+      reason: hasOrigin
+        ? "no road route exists between these two points"
+        : "no road route exists between the ranger post and this target",
       post: meta.post,
     });
   }
