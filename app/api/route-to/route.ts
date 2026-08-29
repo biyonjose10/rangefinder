@@ -14,19 +14,45 @@ export const runtime = "nodejs";
  */
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
-  const lat = Number(params.get("lat"));
-  const lon = Number(params.get("lon"));
+  // Presence first, then value. Number(null) is 0 and 0 is finite, so
+  // converting before checking would accept a request with no coordinates at
+  // all and route to (0, 0) instead of rejecting it.
+  const latRaw = params.get("lat");
+  const lonRaw = params.get("lon");
+  const lat = Number(latRaw);
+  const lon = Number(lonRaw);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json({ error: "lat and lon are required" }, { status: 400 });
+  if (
+    latRaw === null ||
+    lonRaw === null ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lon) > 180
+  ) {
+    return NextResponse.json(
+      { error: "lat and lon are required and must be valid coordinates" },
+      { status: 400 }
+    );
   }
 
   // Optional origin. Without it the route starts at the ranger post, which is
   // what a single target needs; a leg of a planned day starts at the previous
   // target instead.
-  const fromLat = Number(params.get("fromLat"));
-  const fromLon = Number(params.get("fromLon"));
-  const hasOrigin = Number.isFinite(fromLat) && Number.isFinite(fromLon);
+  // Test for the parameter's presence before converting. Number(null) is 0,
+  // and Number.isFinite(0) is true, so converting first silently treats a
+  // missing origin as the Gulf of Guinea — where there are no roads, so the
+  // leg comes back unroutable. That is exactly what broke the outbound leg of
+  // the planned day while the return leg, which had a real origin, worked.
+  const fromLatRaw = params.get("fromLat");
+  const fromLonRaw = params.get("fromLon");
+  const fromLat = Number(fromLatRaw);
+  const fromLon = Number(fromLonRaw);
+  const hasOrigin =
+    fromLatRaw !== null &&
+    fromLonRaw !== null &&
+    Number.isFinite(fromLat) &&
+    Number.isFinite(fromLon);
 
   const meta = await resolveAoi(params.get("aoi"));
   if (!meta) return NextResponse.json({ routed: false, reason: "no area configured" });
