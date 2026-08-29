@@ -95,7 +95,17 @@ const scoreColour = markerColour;
 export default function Home() {
   // Which area of operations we are looking at. Everything else — targets,
   // boundaries, imagery, the road graph — is derived from this.
-  const [aoi, setAoi] = useState<string | null>(null);
+  //
+  // Seeded from `?aoi=` so an area is linkable: a demo, a bug report or a
+  // handover can point at the place it is talking about instead of asking the
+  // reader to find it in the picker. Read lazily rather than in an effect
+  // because the first paint has no payload yet, so nothing rendered depends on
+  // it and hydration cannot disagree.
+  const [aoi, setAoi] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("aoi")
+  );
   const [data, setData] = useState<Payload | null>(null);
   const [areas, setAreas] = useState<ProtectedArea[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -106,6 +116,11 @@ export default function Home() {
   // The planned day. Fetched on demand: sequencing needs a road route between
   // every pair of tasked targets, so it is far dearer than the queue itself.
   const [tour, setTour] = useState<TourPlan | null>(null);
+  // The ranked targets the plan was actually built over. Kept because the plan
+  // and the queue are two separate fetches of live data: a target the plan
+  // decided not to task has to be named from the plan's own list, or a fire
+  // that arrived between the two calls would be reported as "#?".
+  const [planned, setPlanned] = useState<{ id: string }[]>([]);
   const [tourGeometry, setTourGeometry] = useState<[number, number][][] | null>(null);
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,8 +138,13 @@ export default function Home() {
         setFocus(null);
         setError(null);
         setTour(null);
+        setPlanned([]);
         setTourGeometry(null);
-        if (!aoi) setAoi(d.aoi.slug);
+        // Adopt whatever the server actually served. It falls back to the
+        // default area when the requested slug is unknown, and without this a
+        // stale `?aoi=` in a shared link would leave the interface blank
+        // forever, waiting for an area that will never arrive.
+        if (d.aoi.slug !== aoi) setAoi(d.aoi.slug);
       })
       .catch((e) => !cancelled && setError(String(e)));
 
@@ -143,6 +163,18 @@ export default function Home() {
     };
   }, [aoi]);
 
+  // Keep the address bar on the area actually on screen, so the link someone
+  // copies is the view they were looking at. replaceState rather than push:
+  // switching areas is changing a filter, not navigating, and it should not
+  // fill the back button with them.
+  useEffect(() => {
+    if (!aoi) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("aoi") === aoi) return;
+    url.searchParams.set("aoi", aoi);
+    window.history.replaceState(null, "", url);
+  }, [aoi]);
+
   // While a switch is in flight the previous area's payload is still in state.
   // Treating it as stale at render — rather than clearing it in an effect —
   // keeps the old targets from being drawn against the new area's map without
@@ -151,6 +183,19 @@ export default function Home() {
   const shown = stale ? null : data;
 
   const top = useMemo(() => shown?.targets.slice(0, 12) ?? [], [shown]);
+
+  // The plan speaks in target ids, the queue in ranks. A crew reads the rank,
+  // so anything the plan says about a target has to be translated before it is
+  // shown — otherwise "not tasked" is a sentence about nothing in particular.
+  const rankOf = useMemo(() => new Map(top.map((t, i) => [t.id, i + 1])), [top]);
+
+  // The plan's own ordering takes precedence over the queue's. Every id the
+  // plan mentions is by construction in the list it planned over, so this
+  // always resolves; the queue is a second fetch and might not contain it.
+  const planRankOf = useMemo(
+    () => new Map(planned.map((t, i) => [t.id, i + 1])),
+    [planned]
+  );
 
   // Selection can originate on the map, where clicking a marker expanded a row
   // that might be anywhere in the scrolled list — so the sidebar appeared not
@@ -233,6 +278,7 @@ export default function Home() {
               if (tour) {
                 // Toggling off clears the loop but leaves the queue untouched.
                 setTour(null);
+                setPlanned([]);
                 setTourGeometry(null);
                 return;
               }
@@ -246,6 +292,7 @@ export default function Home() {
                   return;
                 }
                 setTour(p.tour);
+                setPlanned(p.targets ?? []);
                 // The server already routed every leg while costing the loop,
                 // so the polylines arrive with the plan. An earlier version
                 // re-fetched each leg from the browser, which meant the drawn
@@ -346,7 +393,10 @@ export default function Home() {
                 <ul className="mt-2 space-y-0.5 border-t border-[var(--line-soft)] pt-1.5">
                   {tour.excluded.map((e) => (
                     <li key={e.id} className="text-[10px] text-[var(--dim)]">
-                      Not tasked — {e.reason === "no road route"
+                      <b className="font-semibold text-[var(--muted)]">
+                        #{planRankOf.get(e.id) ?? rankOf.get(e.id) ?? "?"}
+                      </b>{" "}
+                      not tasked — {e.reason === "no road route"
                         ? "no vehicle route; air or river access"
                         : "does not fit the driving day; carry forward"}
                     </li>
@@ -382,6 +432,8 @@ export default function Home() {
                 key={t.id}
                 target={t}
                 rank={i + 1}
+                stop={tour ? tour.sequence.indexOf(t.id) + 1 : 0}
+                stops={tour?.sequence.length ?? 0}
                 open={t.id === selected}
                 aoiSlug={shown!.aoi.slug}
                 verification={
@@ -452,6 +504,8 @@ function SkeletonList() {
 function TargetRow({
   target: t,
   rank,
+  stop,
+  stops,
   open,
   aoiSlug,
   verification,
@@ -459,6 +513,10 @@ function TargetRow({
 }: {
   target: ScoredTarget;
   rank: number;
+  /** Position in the planned driving loop, 1-based. 0 when not tasked. */
+  stop: number;
+  /** How many targets the loop visits, for "stop 2 of 3". */
+  stops: number;
   open: boolean;
   aoiSlug: string;
   verification: Verification | null;
@@ -478,7 +536,9 @@ function TargetRow({
       aria-expanded={open}
       aria-label={`${severityLabel(t.score)} target, rank ${rank}, ${
         t.protectedArea ?? "unclassified tenure"
-      }, actionability ${Math.round(t.score)} of 100`}
+      }, actionability ${Math.round(t.score)} of 100${
+        stop > 0 ? `, stop ${stop} of ${stops} in today's patrol` : ""
+      }`}
       className="cursor-pointer border-b border-[var(--line-soft)] px-4 py-3 transition-colors hover:bg-[var(--panel-2)] focus:outline-none focus-visible:bg-[var(--panel-2)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
       style={open ? { background: "var(--panel-2)" } : undefined}
       onClick={onClick}
@@ -504,6 +564,14 @@ function TargetRow({
             <span className="truncate text-[13px] font-semibold">
               {t.protectedArea ?? "Unclassified tenure"}
             </span>
+            {/* Where this target falls in the day's driving order. The rank
+                badge says how urgent it is; this says when the crew gets
+                there, and the two deliberately need not agree. */}
+            {stop > 0 && (
+              <span className="mono shrink-0 rounded-sm bg-[var(--accent-dim)] px-1.5 py-px text-[9px] font-bold tracking-wider text-[var(--accent)]">
+                STOP {stop}/{stops}
+              </span>
+            )}
             <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
               <span
                 className="text-[9px] font-bold tracking-wider"

@@ -98,10 +98,57 @@ export function clusterAlerts(alerts: Alert[]): Cluster[] {
     else buckets.set(id, [alerts[i]]);
   }
 
-  return [...buckets.entries()].map(([id, members]) => summarise(id, members));
+  const events = [...buckets.values()].map(summarise);
+
+  // Two events whose centroids land in the same cell would share an id, and an
+  // id is what every later lookup — the map, the plan, the printed order — uses
+  // to mean "this fire and not that one". Rare at 1,500 m separation, but a
+  // silent merge is not an acceptable failure, so collisions get a suffix.
+  const seen = new Set<string>();
+  for (const e of events) {
+    if (!seen.has(e.id)) {
+      seen.add(e.id);
+      continue;
+    }
+    let n = 2;
+    while (seen.has(`${e.id}-${n}`)) n++;
+    e.id = `${e.id}-${n}`;
+    seen.add(e.id);
+  }
+
+  return events;
 }
 
-function summarise(id: number, members: Alert[]): Cluster {
+/**
+ * Grid an id is quantised to, in degrees. About 1.1 km — wider than a
+ * cluster's centroid drifts as new detections land on it between two requests,
+ * and narrower than the 1,500 m that separates one clearing event from the
+ * next.
+ */
+const ID_CELL_DEG = 0.01;
+
+/**
+ * A clearing event's identity is its *place*, not its position in the scan.
+ *
+ * Ids used to be the DBSCAN sequence number — C000, C001 — which meant they
+ * changed meaning every time FIRMS published. The queue and the planned day are
+ * fetched separately (sequencing is far dearer than ranking, so it is only done
+ * on request), and a single new fire appearing between those two calls shifted
+ * every id after it: the plan would then be talking about targets the list on
+ * screen had never heard of, and the interface silently dropped the connection
+ * between them. Observed live — 3,697 detections became 3,074 inside a minute.
+ *
+ * Quantising the centroid gives an id that means the same thing in both
+ * responses, and reads as a location on the printed order rather than as a row
+ * number.
+ */
+function clusterId(lat: number, lon: number): string {
+  const cell = (v: number) =>
+    (Math.round(Math.abs(v) / ID_CELL_DEG) * ID_CELL_DEG).toFixed(2);
+  return `C${cell(lat)}${lat < 0 ? "S" : "N"}${cell(lon)}${lon < 0 ? "W" : "E"}`;
+}
+
+function summarise(members: Alert[]): Cluster {
   let latSum = 0;
   let lonSum = 0;
   let frpSum = 0;
@@ -127,11 +174,13 @@ function summarise(id: number, members: Alert[]): Cluster {
   }
 
   const spanKm = haversineM(minLat, minLon, maxLat, maxLon) / 1000;
+  const lat = latSum / members.length;
+  const lon = lonSum / members.length;
 
   return {
-    id: `C${String(id).padStart(3, "0")}`,
-    lat: latSum / members.length,
-    lon: lonSum / members.length,
+    id: clusterId(lat, lon),
+    lat,
+    lon,
     count: members.length,
     frpSum,
     maxConfidence,

@@ -24,7 +24,7 @@ import type {
  *
  * Deliberately not a machine-learning model. There is no labelled ground-truth
  * dataset of "patrols that were worth sending", so a learned model here would be
- * unfalsifiable dressing. A ranger can argue with these six numbers; that
+ * unfalsifiable dressing. A ranger can argue with these seven numbers; that
  * matters more than a decimal place of accuracy.
  */
 

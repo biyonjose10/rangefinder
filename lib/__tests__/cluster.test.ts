@@ -68,6 +68,43 @@ describe("clusterAlerts", () => {
     expect(clusters[0].lastSeen).toBe("2026-06-05");
   });
 
+  it("gives an event the same id when unrelated fires appear elsewhere", () => {
+    // The regression this guards: ids used to be the DBSCAN sequence number, so
+    // a new fire anywhere in the region renumbered every event after it. The
+    // queue and the planned day are separate fetches of live FIRMS data, and a
+    // renumbering between them silently broke every cross-reference.
+    const fire = [
+      makeAlert({ lat: BASE_LAT, lon: BASE_LON }),
+      makeAlert({ lat: BASE_LAT + 0.0008983, lon: BASE_LON }),
+    ];
+
+    const before = clusterAlerts(fire);
+    // The same fire, now with two unrelated fires ahead of it in the scan.
+    const after = clusterAlerts([
+      makeAlert({ lat: BASE_LAT + 1.5, lon: BASE_LON + 1.5 }),
+      makeAlert({ lat: BASE_LAT + 3.0, lon: BASE_LON + 3.0 }),
+      ...fire,
+    ]);
+
+    const id = before[0].id;
+    expect(after.map((c) => c.id)).toContain(id);
+    // And it reads as a place rather than a row number.
+    expect(id).toMatch(/^C\d+\.\d{2}[NS]\d+\.\d{2}[EW]$/);
+  });
+
+  it("keeps ids unique even when two events quantise to the same cell", () => {
+    // Distinct events are normally further apart than the id grid, but a
+    // collision must never merge two fires into one identity.
+    const clusters = clusterAlerts([
+      makeAlert({ lat: BASE_LAT, lon: BASE_LON }),
+      // ~2 km east: a separate cluster (over the 1.5 km eps) that still rounds
+      // into a neighbouring-or-same 0.01 degree cell depending on the centroid.
+      makeAlert({ lat: BASE_LAT, lon: BASE_LON + 0.018 }),
+    ]);
+    expect(clusters).toHaveLength(2);
+    expect(new Set(clusters.map((c) => c.id)).size).toBe(2);
+  });
+
   it("sums frp and roughly matches the true extent of a spread-out chain cluster", () => {
     // A chain of 5 points, each ~1.4km from the next (under the 1.5km eps so
     // they all density-link into one cluster) running ~5.6km north-south.

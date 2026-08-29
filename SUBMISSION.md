@@ -18,9 +18,9 @@ That method fails predictably. Most alerts are unreachable by any mapped road, d
 
 Rangefinder is a pipeline, not a dashboard skin:
 
-1. **Fetch** — pulls the live NASA FIRMS VIIRS NOAA-20 (Collection 2, NRT) bulk regional CSV for South America, no API key required, clipped to the demo Area of Interest (Upper Xingu Basin, Mato Grosso, Brazil).
+1. **Fetch** — pulls the live NASA FIRMS VIIRS bulk regional CSVs for all three satellites (NOAA-20, Suomi-NPP, NOAA-21; Collection 2, NRT, no API key required), clips them to the selected area and merges them with spatio-temporal deduplication. Each platform crosses at a different local solar time, so a fire that starts and ends between one satellite's overpasses is invisible to it and plain in another's.
 2. **Cluster** — DBSCAN (1,500 m radius) groups the raw 375 m-pixel detections into distinct clearing *events*, so the output is a list of fires, not a list of pixels.
-3. **Score** — each event is scored 0–100 by an explicit **Actionability Score**: a weighted geometric mean of six factors — extent (0.28), protection status (0.22), recency (0.20), road access (0.15), detection confidence (0.10), and proximity to the ranger post (0.05). The geometric mean means one disqualifying factor (nothing can reach it) collapses the score rather than being smoothed away by the others. Protection status is tested by ray-casting each coordinate against the real OpenStreetMap boundary polygon for Parque Indígena do Xingu (3,805 nodes) — not a distance-from-centroid approximation, which we tried first and found actively dangerous (see below).
+3. **Score** — each event is scored 0-100 by an explicit **Actionability Score**: a weighted geometric mean of factors covering extent, forest baseline, protection status, recency, road access, detection confidence and proximity to the ranger post. The geometric mean means one disqualifying factor (nothing can reach it) collapses the score rather than being smoothed away by the others. Protection status is tested by ray-casting each coordinate against the real OpenStreetMap boundary polygon for Parque Indígena do Xingu (3,805 nodes) — not a distance-from-centroid approximation, which we tried first and found actively dangerous (see below).
 4. **Render** — a ranked queue drives a dark MapLibre GL map and a sidebar list, each target showing its factor breakdown and a plain-English rationale.
 5. **Dispatch** — one click renders a real, printable PDF Patrol Dispatch Order (`@react-pdf/renderer`) for the top-ranked targets: GPS in both decimal and DMS, road-access distance and estimated drive time, per-target justification, source attribution, and field checkboxes for what the crew actually found.
 
@@ -30,13 +30,13 @@ An earlier version approximated protected areas as a disc around their centroid.
 
 ## Technologies
 
-Next.js 16 (App Router, API routes) · React 19 · TypeScript · Tailwind CSS 4 · MapLibre GL JS · @react-pdf/renderer · NASA FIRMS (VIIRS NOAA-20 C2 NRT) · OpenStreetMap / Overpass API · Copernicus Sentinel-2 L2A via Microsoft Planetary Computer · CARTO dark-matter basemap · deployed on Vercel.
+Next.js 16 (App Router, API routes) · React 19 · TypeScript · Tailwind CSS 4 · MapLibre GL JS · @react-pdf/renderer · NASA FIRMS (VIIRS NOAA-20 / Suomi-NPP / NOAA-21, C2 NRT) · OpenStreetMap / Overpass API · Copernicus Sentinel-2 L2A via Microsoft Planetary Computer · CARTO dark-matter basemap · deployed on Vercel.
 
-No machine-learning model is used for scoring — deliberately: there is no labelled dataset of "patrols that were worth sending," so a learned model would be unfalsifiable dressing. The six-factor score is hand-specified and documented so a ranger can argue with it.
+No machine-learning model is used for scoring — deliberately: there is no labelled dataset of "patrols that were worth sending," so a learned model would be unfalsifiable dressing. The seven-factor score is hand-specified and documented so a ranger can argue with it.
 
 ## What's next
 
-- Configurable AOIs and ranger posts, instead of the single hard-coded demo region.
+- Per-station configuration: areas are already data rather than code (`scripts/setup_aoi.py` builds one from a bounding box), but each still carries a single origin station picked automatically as the nearest settlement.
 - Fresher, denser road data for remote frontier areas, where OSM coverage is often the weakest link in the access estimate.
 - A record of which orders were issued and what patrols actually found, closing the loop back into the score.
 - Extending beyond the Amazon frontier case to other FIRMS regions (Africa and South/Southeast Asia sources are already wired in `lib/sources/firms.ts`).

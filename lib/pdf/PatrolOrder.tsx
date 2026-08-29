@@ -41,8 +41,11 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     marginBottom: 3,
   },
-  title: { fontSize: 20, fontFamily: "Helvetica-Bold", marginBottom: 2 },
-  subtitle: { fontSize: 9, color: "#4b5563", marginBottom: 12 },
+  // Both carry their own lineHeight. The page sets 1.45, which at 20pt leaves
+  // the title's descenders sitting on the subtitle's ascenders — legible on a
+  // screen, a smudge on a photocopied field order.
+  title: { fontSize: 20, fontFamily: "Helvetica-Bold", lineHeight: 1.2, marginBottom: 4 },
+  subtitle: { fontSize: 9, color: "#4b5563", lineHeight: 1.3, marginBottom: 12 },
 
   metaRow: { flexDirection: "row", marginBottom: 14, gap: 0 },
   metaCell: { flex: 1, paddingRight: 10 },
@@ -83,16 +86,28 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   taskHead: { flexDirection: "row", justifyContent: "space-between", marginBottom: 5 },
-  rank: { fontSize: 12, fontFamily: "Helvetica-Bold" },
-  scorePill: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#166534" },
+  // A long protected-area name plus the priority and baseline annotations used
+  // to run straight under the severity label. The heading wraps; the label,
+  // which is the part a crew scans for, never gives up room.
+  rank: { flex: 1, paddingRight: 10, fontSize: 12, fontFamily: "Helvetica-Bold", lineHeight: 1.25 },
+  scorePill: {
+    flexShrink: 0,
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#166534",
+    textAlign: "right",
+  },
 
-  coordRow: { flexDirection: "row", marginBottom: 6 },
-  coordCell: { flex: 1 },
+  coordRow: { flexDirection: "row", marginTop: 2, marginBottom: 7 },
+  // DMS is much the widest of the three — 31 monospaced characters — so it gets
+  // the room rather than spilling into the transit column beside it.
+  coordCell: { flex: 1, paddingRight: 8 },
+  coordCellWide: { flex: 1.35, paddingRight: 8 },
   coordLabel: { fontSize: 6.5, color: "#6b7280", fontFamily: "Helvetica-Bold" },
-  coordValue: { fontSize: 9.5, fontFamily: "Courier-Bold" },
+  coordValue: { fontSize: 8.5, fontFamily: "Courier-Bold" },
 
   bullet: { flexDirection: "row", marginBottom: 1.5 },
-  bulletDot: { width: 9, color: "#166534" },
+  bulletDot: { width: 12, color: "#166534" },
   bulletText: { flex: 1, fontSize: 8.5, color: "#374151" },
 
   findings: {
@@ -254,7 +269,7 @@ export function PatrolOrder(props: PatrolOrderProps) {
                   {t.lat.toFixed(5)}, {t.lon.toFixed(5)}
                 </Text>
               </View>
-              <View style={styles.coordCell}>
+              <View style={styles.coordCellWide}>
                 <Text style={styles.coordLabel}>DMS</Text>
                 <Text style={styles.coordValue}>
                   {toDms(t.lat, "lat")} {toDms(t.lon, "lon")}

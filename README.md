@@ -54,7 +54,7 @@ on the roadmap below.
 ```mermaid
 flowchart LR
     A[NASA FIRMS VIIRS<br/>active-fire CSV] --> B[DBSCAN cluster<br/>375m pixels → events]
-    B --> C[Actionability Score<br/>six weighted factors]
+    B --> C[Actionability Score<br/>seven weighted factors]
     D[OpenStreetMap roads<br/>+ protected-area boundary] --> C
     C --> E[Ranked patrol queue<br/>dark map + sidebar]
     E --> F[Patrol Dispatch Order<br/>PDF]
@@ -72,16 +72,17 @@ If the live FIRMS fetch fails or returns nothing for the AOI, the app falls back
 
 Every factor is normalised to 0–1 and combined as a **weighted geometric mean**, not a weighted average. That choice matters: with a geometric mean, one disqualifying factor (a target no vehicle can reach) correctly collapses the score instead of being averaged away by the others. Each factor is floored just above zero so one missing input can't annihilate an otherwise urgent target outright.
 
-It is deliberately not a machine-learning model — there is no labelled dataset of "patrols that were worth sending," so a learned model here would be unfalsifiable dressing. A ranger can argue with six numbers; that matters more than a decimal place of accuracy.
+It is deliberately not a machine-learning model — there is no labelled dataset of "patrols that were worth sending," so a learned model here would be unfalsifiable dressing. A ranger can argue with seven numbers; that matters more than a decimal place of accuracy.
 
 | Factor | Weight | What it measures |
 |---|---|---|
-| **Extent** | 0.28 | How much forest is actually coming down. A blend of detection count (saturating at 30 detections/24h — beyond that the decision to go is unambiguous) and total fire radiative power, which breaks ties between equal-count clusters. |
-| **Protection** | 0.22 | Whether the event falls inside a legally protected area, tested by ray-casting the coordinate against the real OpenStreetMap boundary polygon (not a distance approximation — see below). Inside scores 1.0; outside scores 0.35, not zero, because unclassified land still warrants a look. |
-| **Recency** | 0.20 | Can the crew still be caught on site. Detections decay on a two-day half-life; past ~72 hours the visit becomes evidence collection rather than interdiction. |
-| **Access** | 0.15 | Can a vehicle physically get there. Falls off hyperbolically with distance to the nearest mapped road — on a track scores 1.0, 1 km off scores 0.5, 5 km off scores 0.17 — with a 0.05 floor so remote mega-clearings still surface for an overflight rather than vanishing from the list. |
-| **Confidence** | 0.10 | How much the detection itself is trusted — VIIRS's own low/nominal/high confidence flag. |
-| **Proximity** | 0.05 | Fuel and hours from the ranger post. Deliberately the smallest weight: a small, close fire and a large, far one should not be conflated just because one is cheaper to reach. |
+| **Extent** | 0.24 | How much forest is actually coming down. A blend of detection count (saturating at 30 detections/24h — beyond that the decision to go is unambiguous) and total fire radiative power, which breaks ties between equal-count clusters. |
+| **Forest** | 0.20 | Was this forest to begin with. ESA WorldCover tree cover at the point, aged forward with Hansen annual loss. FIRMS reports heat, not forest loss, and in burning season most fires sit on land cleared years ago — without this factor the tool ranks pasture maintenance as urgent deforestation and looks entirely convincing doing it. Unknown scores 0.6, not zero: a gap in our baseline is not evidence against a target. |
+| **Protection** | 0.18 | Whether the event falls inside a legally protected area, tested by ray-casting the coordinate against the real OpenStreetMap boundary polygon (not a distance approximation — see below). Inside scores 1.0; outside scores 0.35, not zero, because unclassified land still warrants a look. |
+| **Recency** | 0.17 | Can the crew still catch them on site. Detections decay on a two-day half-life; past ~72 hours the visit becomes evidence collection rather than interdiction. |
+| **Access** | 0.12 | Can a vehicle physically get there. Falls off hyperbolically with distance to the nearest mapped road — on a track scores 1.0, 1 km off scores 0.5, 5 km off scores 0.17 — with a 0.05 floor so remote mega-clearings still surface for an overflight rather than vanishing from the list. |
+| **Confidence** | 0.06 | How much the detection itself is trusted — VIIRS's own low/nominal/high confidence flag, lifted slightly for night detections, which are both cleaner optically and likelier to be something somebody did not want observed. |
+| **Proximity** | 0.03 | Fuel and hours from the ranger post. Deliberately the smallest weight: a small, close fire and a large, far one should not be conflated just because one is cheaper to reach. |
 
 The weights and rationale live in `lib/score.ts`, alongside a rough one-way travel-time estimate (road speed for the driveable leg, walking pace for the final off-road approach) that also appears on the dispatch order.
 
@@ -214,7 +215,7 @@ See `ATTRIBUTIONS.md` for full licence details. In short: NASA FIRMS (active fir
 
 ## Known limitations / what production would need
 
-- **One AOI, one ranger post.** The Upper Xingu Basin bounding box and the Peixoto de Azevedo post are hard-coded in `lib/config.ts`. A real deployment needs per-station configuration and a way to define an AOI without editing source.
+- **One ranger post per area, and it is a guess.** Areas themselves are data, not code — `scripts/setup_aoi.py` adds one without touching source — but each carries a single origin station, picked automatically as the nearest sizeable settlement in OSM. A real station is somewhere a person chose, there is usually more than one, and crews do not always start from the same place.
 - **Roads and protected-area data are point-in-time OSM snapshots**, not a live feed — remote frontier roads are frequently missing or outdated in OSM, which directly understates access difficulty.
 - **No persistence.** There are no accounts, no history of which orders were issued or which targets were actually visited, and no way to mark a target as actioned. Every load is a fresh score against the current 24h window.
 - **No notifications or dispatch integration.** The PDF has to be generated and handed off manually; there is no SMS/radio alerting and no drone or vehicle tasking.
