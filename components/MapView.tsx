@@ -213,6 +213,53 @@ export default function MapView({
         },
       });
 
+      // The planned day: the whole loop, post out and back. Separate from the
+      // single-target route so the two can be shown independently — one answers
+      // "how do I reach this target", the other "what is my day".
+      m.addSource("tour", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      m.addLayer({
+        id: "tour-casing",
+        type: "line",
+        source: "tour",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#0b1210", "line-width": 7, "line-opacity": 0.9 },
+      });
+      m.addLayer({
+        id: "tour-line",
+        type: "line",
+        source: "tour",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#4ade80",
+          "line-width": 2.6,
+          "line-opacity": 0.95,
+          "line-dasharray": [2.5, 1.5],
+        },
+      });
+
+      // Road route to a single selected target.
+      m.addSource("route", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      m.addLayer({
+        id: "route-casing",
+        type: "line",
+        source: "route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#0b1210", "line-width": 5.5, "line-opacity": 0.9 },
+      });
+      m.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#e8f0ed", "line-width": 2, "line-opacity": 0.95 },
+      });
+
       setReady(true);
     };
 
