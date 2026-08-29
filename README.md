@@ -2,7 +2,7 @@
 
 Deforestation alerting is a solved problem. Deciding which alert to drive to first is not — Rangefinder turns a firehose of satellite fire detections into a short, ranked, printable patrol order.
 
-![Rangefinder — the road-gridded agricultural frontier on the west, the roadless Parque Indígena do Xingu on the east, live fire detections ranked between them](docs/screenshot.jpg)
+![Rangefinder on the Sebangau peatlands — raw VIIRS detections in orange, the national park boundary dashed, and the day planned as one driving loop from Palangka Raya through four ranked targets and back](docs/screenshot.jpg)
 
 **Live demo: [https://rangefinder-cyan.vercel.app](https://rangefinder-cyan.vercel.app)**
 
