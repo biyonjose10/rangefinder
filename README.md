@@ -87,7 +87,9 @@ The weights and rationale live in `lib/score.ts`, alongside a rough one-way trav
 
 ## The Xingu finding
 
-Running the pipeline against the two configured areas on 2026-08-28:
+Running the pipeline against the two configured areas. These are a **dated
+snapshot, not fixed values** — the feed is live and the counts climb through
+the burning season, so a run today will differ:
 
 | | Upper Xingu (Brazil) | Sebangau (Indonesia) |
 |---|---|---|

@@ -45,7 +45,7 @@ No machine-learning model is used for scoring — deliberately: there is no labe
 
 | Time | Shot |
 |---|---|
-| 0:00–0:15 | Open cold on the impact number, not a title card: the header showing **3,697 detections → 115 clearing events** on Sebangau, full screen. |
+| 0:00–0:15 | Open cold on the impact number, not a title card: the header showing **today's detection and clearing-event counts**, full screen. Read the numbers off the screen as you record — this is live data and they climb through the burning season, so do not script a figure in advance. |
 | 0:15–0:35 | Voiceover states the problem in one breath: thousands of alerts, one patrol, no way to choose today. Cut to the dark map with the raw detection cloud. |
 | 0:35–1:20 | **Uninterrupted live screen capture.** Open rank 1 on Sebangau — the fire inside the national park — to show the factor bars, the forest baseline, the routed distance and the rank-stability figure. Switch areas with the picker to prove it is not one hardcoded valley. Click "Generate patrol order" and let the PDF render in-browser. No cuts. |
 | 1:20–1:40 | Zoom on the PDF: GPS in DMS, access/transit line, the "INSIDE PROTECTED TERRITORY" tag, the field checkboxes. |
