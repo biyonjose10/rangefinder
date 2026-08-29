@@ -136,8 +136,13 @@ export default function MapView({
     m.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
     map.current = m;
 
-    // Development-only handle for inspecting layer state from the console.
-    if (process.env.NODE_ENV !== "production") {
+    // Handle for inspecting layer state from the console. Available in
+    // development, and in production only when ?debug=1 is present — diagnosing
+    // a rendering fault on the deployed site is otherwise guesswork.
+    if (
+      process.env.NODE_ENV !== "production" ||
+      new URLSearchParams(window.location.search).has("debug")
+    ) {
       (window as unknown as { __rfMap?: MlMap }).__rfMap = m;
     }
 
