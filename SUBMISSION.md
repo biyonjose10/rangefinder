@@ -41,13 +41,45 @@ No machine-learning model is used for scoring — deliberately: there is no labe
 - A record of which orders were issued and what patrols actually found, closing the loop back into the score.
 - Extending beyond the Amazon frontier case to other FIRMS regions (Africa and South/Southeast Asia sources are already wired in `lib/sources/firms.ts`).
 
-## Demo video shot list (2:00)
+## Demo video script (~2:30)
 
-| Time | Shot |
-|---|---|
-| 0:00–0:15 | Open cold on the impact number, not a title card: the header showing **today's detection and clearing-event counts**, full screen. Read the numbers off the screen as you record — this is live data and they climb through the burning season, so do not script a figure in advance. |
-| 0:15–0:35 | Voiceover states the problem in one breath: thousands of alerts, one patrol, no way to choose today. Cut to the dark map with the raw detection cloud. |
-| 0:35–1:20 | **Uninterrupted live screen capture.** Open rank 1 on Sebangau — the fire inside the national park — to show the factor bars, the forest baseline, the routed distance and the rank-stability figure. Switch areas with the picker to prove it is not one hardcoded valley. Click "Generate patrol order" and let the PDF render in-browser. No cuts. |
-| 1:20–1:40 | Zoom on the PDF: GPS in DMS, access/transit line, the "INSIDE PROTECTED TERRITORY" tag, the field checkboxes. |
-| 1:40–1:55 | The honesty beat: our own NDVI evidence was 71% seasonal once tested against a control, and we corrected it rather than shipping the flattering number. |
-| 1:55–2:00 | Close on the thesis line: "A heatmap hides the small illegal fire behind the big legal one. Rangefinder doesn't." |
+Deadline: **Aug 30 2026, 11:45pm CDT** (Aug 31, 10:15 AM IST). Devpost sets no
+length limit, so this runs to 2:30 rather than squeezing the impact argument —
+Environmental Impact is 30% of the score, the single heaviest criterion.
+
+**Read every live figure off the screen as you record.** This is live FIRMS
+data and it moves hourly; the counts below are shapes, not numbers to script.
+
+| Time | On screen | Say |
+|---|---|---|
+| 0:00–0:12 | Sebangau loaded, full window. Header counts visible. Do not move the mouse. | "This is one protected area, one day. Three and a half thousand satellite fire detections in twenty-four hours, resolved into a hundred-odd distinct clearing events. The park office can send one patrol." |
+| 0:12–0:30 | Zoom slowly into the orange raw-detection cloud so the individual VIIRS pixels resolve. | "Today that choice gets made by eyeballing a heatmap — whichever blob looks biggest wins. That fails in a specific way. Most of these fires are on land cleared years ago: pasture maintenance, crop residue, entirely legal. And a heatmap makes a hundred-detection legal burn look more urgent than a two-detection fire inside a national park. The second one is the crime." |
+| 0:30–0:52 | Click rank 1. Let the factor bars and rationale fill the sidebar. | "Rangefinder ranks them. Top of the queue sits inside Taman Nasional Sebangau, on land that was eighty percent closed forest at baseline. Seven factors, every one of them visible and arguable. Deliberately not a machine-learning model — there is no dataset of patrols that turned out to be worth sending, so a learned score would be unfalsifiable dressing. A ranger can argue with seven numbers." |
+| 0:52–1:08 | Cursor rests on the **Forest** bar, then the "80% forest baseline" tag. | "The forest factor is the one that matters most. FIRMS detects heat, not deforestation. Without a baseline the tool ranks farm burns as urgent clearing and looks completely convincing doing it. Every target is checked against ESA WorldCover tree cover, aged forward with Hansen annual loss." |
+| 1:08–1:38 | Click **Plan the day**. Do not cut — let the routing compute and the loop draw itself. | "Ranking alone is not enough, because a crew drives one loop, not five round trips. This sequences the day: four targets, one loop from Palangka Raya and back, eight and a half hours including time on the ground. Read the line underneath — as separate return trips the same list implies sixteen hours, a day nobody can drive, because it counts the journey home and back out again between every target. And the top-priority target is stop one of four: priority and driving order are different questions. The target that does not fit is named and carried forward, not silently dropped." |
+| 1:38–1:58 | Click **Generate patrol order**. Let the PDF render in-browser. Scroll to one task card. | "One click and it is a field order. GPS in decimal and DMS, road distance and drive time, the reason this target was chosen, and checkboxes for what the crew actually found. Every order states that thermal detections are not proof of illegality — this is decision support, not a verdict." |
+| 1:58–2:12 | Back to the app. Switch area with the picker to Upper Xingu. Let it load. | "It is not one hardcoded valley. Same pipeline, different continent — the Upper Xingu in Brazil, a road-gridded frontier pushing into forest. Adding an area is a bounding box and a script, not a code change." |
+| 2:12–2:30 | Rest on the ranked queue. | "Deforestation alerting is solved. Deciding which alert to drive to first is not, and that is exactly where alerts stop turning into patrols and trees keep falling. Rangefinder adds no new data. It turns the data that already exists into a day's work a ranger can defend afterwards. A heatmap hides the small illegal fire behind the big legal one. Rangefinder does not." |
+
+### If you need to cut to 2:00
+
+Drop the area-switch beat (1:58–2:12) and tighten the forest-factor beat to one
+sentence. Keep Plan the day whole — it is the part no other submission has.
+
+### Recording notes
+
+- **Let the roads finish loading before you hit record.** The road network is a
+  5.9 MB GeoJSON and takes 10–15 seconds; until it lands the map is bare and the
+  opening shot looks empty. Open `?aoi=kalimantan-sebangau`, count to twenty,
+  then record.
+- Deep-link straight to the area — `rangefinder-cyan.vercel.app/?aoi=kalimantan-sebangau`
+  — rather than loading the default and switching on camera.
+- **Plan the day takes about ten seconds.** Do not cut it out. It is routing
+  every pair of targets across a real road graph, and letting it run is more
+  convincing than a jump cut.
+- Hide the bookmarks bar (Ctrl+Shift+B) and record the full window at 1080p or
+  better; the sidebar type is small.
+- The patrol order opens in a new tab. Have that tab closed beforehand so the
+  render is visible from the first frame.
+- Sanity-check page 2 of the PDF before recording — the tasked targets continue
+  there, along with the "considered but not tasked" list.
