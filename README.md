@@ -211,7 +211,7 @@ data/
 
 ## Data sources
 
-See `ATTRIBUTIONS.md` for full licence details. In short: NASA FIRMS (active fire), OpenStreetMap via Overpass (roads, protected-area boundary), Copernicus Sentinel-2 via Microsoft Planetary Computer (NDVI verification), CARTO dark-matter basemap tiles.
+See `ATTRIBUTIONS.md` for full licence details. In short: NASA FIRMS (active fire), OpenStreetMap via Overpass (roads, protected-area boundary), Copernicus Sentinel-2 via Microsoft Planetary Computer (NDVI verification), ESA WorldCover and Hansen Global Forest Change (forest baseline), Open-Meteo (cloud and rainfall). The map uses no hosted basemap tile service — it renders from a self-contained style over the OSM-derived geometry above.
 
 ## Known limitations / what production would need
 
