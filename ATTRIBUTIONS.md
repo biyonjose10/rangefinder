@@ -34,6 +34,16 @@ Per-request attribution is also embedded in the generated Patrol Dispatch Order 
 | [Vitest](https://vitest.dev/) | Test runner | MIT |
 | [rasterio](https://rasterio.readthedocs.io/) / [pystac-client](https://pystac-client.readthedocs.io/) | Raster and STAC access in the data-preparation scripts | BSD-3-Clause / Apache-2.0 |
 
+## Demo video
+
+| Asset | Use | Licence |
+|---|---|---|
+| **"Cylinder One"** by Chris Zabriskie, from the album *Cylinders* (2014) | Background music bed in the two-minute demo video. Not part of the application. | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — © 2014 Chris Zabriskie — [chriszabriskie.com](https://chriszabriskie.com/cylinders/) |
+
+Attribution line for any platform the video is published on:
+
+> *Cylinder One* by Chris Zabriskie — licensed under CC BY 4.0 — chriszabriskie.com
+
 ## Notes on use
 
 - The NASA FIRMS bulk CSV endpoint is used in preference to the keyed Area API: it requires no `MAP_KEY`, so the application holds no credential to leak and has no rate limit to exhaust during a demo, while carrying the identical NRT data on the same update cadence.
