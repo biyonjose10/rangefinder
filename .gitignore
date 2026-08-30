@@ -15,3 +15,4 @@ next-env.d.ts
 
 # Internal submission scaffolding — Devpost copy + demo script, kept local
 SUBMISSION.md
+devpost-story.md
