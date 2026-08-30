@@ -4,7 +4,7 @@ Deforestation alerting is a solved problem. Deciding which alert to drive to fir
 
 ![Rangefinder on the Sebangau peatlands — raw VIIRS detections in orange, the national park boundary dashed, and the day planned as one driving loop from Palangka Raya through four ranked targets and back](docs/screenshot.jpg)
 
-**Live demo: [https://rangefinder-cyan.vercel.app](https://rangefinder-cyan.vercel.app)**
+**Live demo: [https://rangefinder-cyan.vercel.app](https://rangefinder-cyan.vercel.app)** · **[Two-minute demo video](https://www.youtube.com/watch?v=TIV161PhWwo)**
 
 Built for **Hack the Habitat** (theme: tech that protects the planet's ecosystems, climate and wildlife).
 
