@@ -12,3 +12,6 @@ next-env.d.ts
 *.tsbuildinfo
 
 .vercel
+
+# Internal submission scaffolding — Devpost copy + demo script, kept local
+SUBMISSION.md
